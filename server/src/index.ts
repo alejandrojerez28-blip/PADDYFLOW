@@ -35,7 +35,8 @@ app.use(
   })
 );
 
-// Webhook Stripe: raw body obligatorio para validar firma (ANTES de express.json)
+// Webhook Stripe: raw body obligatorio para validar firma (ANTES de express.json).
+// Solo /api/stripe/* recibe raw body; el resto usa express.json().
 app.use(
   '/api/stripe',
   express.raw({ type: 'application/json' }),

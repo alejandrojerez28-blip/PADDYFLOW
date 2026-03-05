@@ -7,7 +7,7 @@ import { eq } from 'drizzle-orm';
 const router = Router();
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 type SubscriptionStatus =
   | 'trialing'
@@ -116,7 +116,9 @@ router.post(
   '/webhook',
   async (req: Request, res: Response): Promise<void> => {
     if (!webhookSecret || !stripe) {
-      console.error('STRIPE_WEBHOOK_SECRET o STRIPE_SECRET_KEY no configurado');
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('STRIPE_WEBHOOK_SECRET o STRIPE_SECRET_KEY no configurado');
+      }
       res.status(500).json({ error: 'Webhook no configurado' });
       return;
     }
@@ -134,10 +136,11 @@ router.post(
         sig,
         webhookSecret
       );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Webhook signature verification failed:', message);
-      res.status(400).json({ error: `Webhook Error: ${message}` });
+    } catch {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Webhook signature verification failed');
+      }
+      res.status(400).json({ error: 'Firma de webhook inválida' });
       return;
     }
 
@@ -234,7 +237,7 @@ router.post(
         case 'invoice.payment_failed': {
           const invoice = event.data.object as Stripe.Invoice;
           const subId = invoice.subscription as string | null;
-          if (subId) {
+          if (subId && stripe) {
             const sub = await stripe.subscriptions.retrieve(subId);
             await updateTenantFromSubscription(sub);
           }
@@ -244,7 +247,11 @@ router.post(
           break;
       }
     } catch (err) {
-      console.error('Webhook handler error:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Webhook handler error:', err);
+      } else {
+        console.error('Webhook handler error');
+      }
     }
 
     res.status(200).json({ received: true });
