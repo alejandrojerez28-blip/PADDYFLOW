@@ -36,6 +36,13 @@
       "when": 1772748779800,
       "tag": "0005_document_counters",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1772750000000,
+      "tag": "0006_performance_indexes",
+      "breakpoints": true
     }
   ]
 }

@@ -276,6 +276,8 @@ export const salesDocuments = pgTable(
   (table) => [
     index('sales_documents_tenant_id_idx').on(table.tenantId),
     index('sales_documents_tenant_kind_idx').on(table.tenantId, table.kind),
+    index('sales_documents_tenant_created_at_idx').on(table.tenantId, table.createdAt),
+    index('sales_documents_tenant_issue_date_idx').on(table.tenantId, table.issueDate),
   ]
 );
 

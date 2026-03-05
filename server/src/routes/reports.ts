@@ -2,7 +2,7 @@ import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import { db } from '../db/index.js';
 import { salesDocuments } from '../db/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, gte, lte } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware } from '../middleware/tenantContext.js';
 import { requireTenantMiddleware } from '../middleware/requireTenant.js';
@@ -33,21 +33,15 @@ router.get(
     const to = req.query.to as string | undefined;
 
     try {
-      let query = db
+      const conditions = [eq(salesDocuments.tenantId, req.tenantId)];
+      if (from) conditions.push(gte(salesDocuments.issueDate, from));
+      if (to) conditions.push(lte(salesDocuments.issueDate, to));
+
+      const docs = await db
         .select()
         .from(salesDocuments)
-        .where(eq(salesDocuments.tenantId, req.tenantId))
+        .where(and(...conditions))
         .orderBy(desc(salesDocuments.issueDate));
-
-      const docs = await query;
-
-      let filtered = docs;
-      if (from) {
-        filtered = filtered.filter((d) => d.issueDate && d.issueDate >= from);
-      }
-      if (to) {
-        filtered = filtered.filter((d) => d.issueDate && d.issueDate <= to);
-      }
 
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'PaddyFlow';
@@ -66,7 +60,7 @@ router.get(
 
       sheet.getRow(1).font = { bold: true };
 
-      for (const d of filtered) {
+      for (const d of docs) {
         const number = d.ncfOrEcfNumber ?? d.internalNumber ?? d.id.slice(0, 8);
         sheet.addRow({
           issueDate: d.issueDate ?? '',
@@ -95,7 +89,7 @@ router.get(
 );
 
 /**
- * GET /api/reports/documents/export?format=xlsx
+ * GET /api/reports/documents/export?format=xlsx&from=YYYY-MM-DD&to=YYYY-MM-DD
  * Export genérico de documentos (proformas + facturas)
  */
 router.get(
@@ -115,11 +109,18 @@ router.get(
       return;
     }
 
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+
     try {
+      const conditions = [eq(salesDocuments.tenantId, req.tenantId)];
+      if (from) conditions.push(gte(salesDocuments.issueDate, from));
+      if (to) conditions.push(lte(salesDocuments.issueDate, to));
+
       const docs = await db
         .select()
         .from(salesDocuments)
-        .where(eq(salesDocuments.tenantId, req.tenantId))
+        .where(and(...conditions))
         .orderBy(desc(salesDocuments.createdAt));
 
       const workbook = new ExcelJS.Workbook();
