@@ -3,6 +3,33 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import { db } from '../db/index.js';
 import { users, tenants } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
+import type { SafeUser } from '../types/safeUser.js';
+
+/** Re-export para uso en express.d.ts */
+export type { SafeUser };
+
+/** Mapea fila de usuario a objeto seguro (excluye passwordHash) */
+function toSafeUser(row: {
+  id: string;
+  tenantId: string;
+  email: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): SafeUser {
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    isActive: row.isActive,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 // Fail-fast: no fallback. Server must not start without JWT_SECRET.
 const rawSecret = process.env.JWT_SECRET;
@@ -65,7 +92,16 @@ export async function authMiddleware(
     }) as unknown as JwtPayload;
 
     const [userRow] = await db
-      .select()
+      .select({
+        id: users.id,
+        tenantId: users.tenantId,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
       .from(users)
       .where(
         and(
@@ -93,7 +129,7 @@ export async function authMiddleware(
     }
 
     req.user = {
-      ...userRow,
+      ...toSafeUser(userRow),
       tenant: tenantRow,
     };
     req.tenantId = userRow.tenantId;

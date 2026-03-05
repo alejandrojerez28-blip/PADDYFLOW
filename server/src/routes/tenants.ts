@@ -22,7 +22,7 @@ router.get(
       return;
     }
 
-    const { passwordHash: _, tenant, ...userSafe } = req.user;
+    const { tenant, ...userSafe } = req.user;
 
     res.json({
       tenant: {
