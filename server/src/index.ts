@@ -16,7 +16,24 @@ import reportsRoutes from './routes/reports.js';
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-app.use(cors({ origin: true, credentials: true }));
+// CORS: restringir a APP_BASE_URL (comma-separated) o localhost:5173 en dev
+const allowedOriginsRaw = process.env.APP_BASE_URL?.split(',').map((s) => s.trim()).filter(Boolean);
+const allowedOrigins =
+  allowedOriginsRaw && allowedOriginsRaw.length > 0 ? allowedOriginsRaw : ['http://localhost:5173'];
+if (process.env.NODE_ENV !== 'production' && !allowedOrigins.includes('http://localhost:5173')) {
+  allowedOrigins.push('http://localhost:5173');
+}
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true); // Postman, curl, server-to-server
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      callback(null, false); // Rechazar origen no permitido
+    },
+    credentials: true,
+  })
+);
 
 // Webhook Stripe: raw body obligatorio para validar firma (ANTES de express.json)
 app.use(
