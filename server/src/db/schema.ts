@@ -143,6 +143,30 @@ export const billingEvents = pgTable(
 export type BillingEvent = typeof billingEvents.$inferSelect;
 export type NewBillingEvent = typeof billingEvents.$inferInsert;
 
+// ============ DOCUMENT COUNTERS (numeración transaccional sin race) ============
+export const documentCounters = pgTable(
+  'document_counters',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    key: varchar('key', { length: 64 }).notNull(),
+    prefix: varchar('prefix', { length: 16 }).notNull(),
+    nextNumber: integer('next_number').notNull().default(1),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('document_counters_tenant_key_unique').on(table.tenantId, table.key),
+    index('document_counters_tenant_key_idx').on(table.tenantId, table.key),
+  ]
+);
+
+export type DocumentCounter = typeof documentCounters.$inferSelect;
+export type NewDocumentCounter = typeof documentCounters.$inferInsert;
+
 // ============ USERS ============
 // Unique: (tenant_id, lower(email)) — migración 0004_unique_email_per_tenant
 export const users = pgTable(

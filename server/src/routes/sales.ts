@@ -15,6 +15,7 @@ import { requireTenantMiddleware } from '../middleware/requireTenant.js';
 import { requireFiscalReadyForWritesMiddleware } from '../middleware/requireFiscalReadyForWrites.js';
 import { requireActiveSubscriptionMiddleware } from '../middleware/requireActiveSubscription.js';
 import { getEcfAdapter } from '../ecf/EcfProviderRegistry.js';
+import { allocateDocumentNumber } from '../lib/documentNumber.js';
 
 const router = Router();
 
@@ -107,23 +108,7 @@ router.post(
     try {
       const { customerId, currency, items, notes } = parsed.data;
 
-      const existingProformas = await db
-        .select({ internalNumber: salesDocuments.internalNumber })
-        .from(salesDocuments)
-        .where(
-          and(
-            eq(salesDocuments.tenantId, req.tenantId),
-            eq(salesDocuments.kind, 'PROFORMA')
-          )
-        );
-
-      const maxNum = existingProformas.reduce((acc, d) => {
-        const match = d.internalNumber?.match(/PF-(\d+)/);
-        const n = match ? parseInt(match[1], 10) : 0;
-        return Math.max(acc, n);
-      }, 0);
-      const nextNum = maxNum + 1;
-      const internalNumber = `PF-${String(nextNum).padStart(6, '0')}`;
+      const internalNumber = await allocateDocumentNumber(req.tenantId, 'PROFORMA');
 
       let subtotal = 0;
       let itbisTotal = 0;
@@ -231,39 +216,43 @@ router.post(
       let fiscalType: (typeof dgiiSequences.$inferSelect.docType) | null = null;
       let ncfOrEcfNumber: string | null = null;
 
+      const tenantId = req.tenantId;
       type DocType = (typeof dgiiSequences.$inferSelect)['docType'];
       const preferredTypes: DocType[] = requestedDocType
         ? [requestedDocType]
         : ['ECF_E31', 'ECF_E32', 'NCF_B01', 'NCF_B02'];
 
-      for (const dt of preferredTypes) {
-        const [seq] = await db
-          .select()
-          .from(dgiiSequences)
-          .where(
-            and(
-              eq(dgiiSequences.tenantId, req.tenantId),
-              eq(dgiiSequences.docType, dt),
-              eq(dgiiSequences.isActive, true)
+      await db.transaction(async (tx) => {
+        for (const dt of preferredTypes) {
+          const [seq] = await tx
+            .select()
+            .from(dgiiSequences)
+            .where(
+              and(
+                eq(dgiiSequences.tenantId, tenantId),
+                eq(dgiiSequences.docType, dt),
+                eq(dgiiSequences.isActive, true)
+              )
             )
-          )
-          .limit(1);
+            .limit(1)
+            .for('update');
 
-        if (seq && seq.currentNumber < seq.endNumber) {
-          const nextNum = seq.currentNumber + 1;
-          const padded = String(nextNum).padStart(11, '0');
-          ncfOrEcfNumber = `${seq.prefix}${seq.series ?? ''}${padded}`;
-          fiscalType = seq.docType;
-          sequenceId = seq.id;
+          if (seq && seq.currentNumber < seq.endNumber) {
+            const nextNum = seq.currentNumber + 1;
+            const padded = String(nextNum).padStart(11, '0');
+            ncfOrEcfNumber = `${seq.prefix}${seq.series ?? ''}${padded}`;
+            fiscalType = seq.docType;
+            sequenceId = seq.id;
 
-          await db
-            .update(dgiiSequences)
-            .set({ currentNumber: nextNum })
-            .where(eq(dgiiSequences.id, seq.id));
+            await tx
+              .update(dgiiSequences)
+              .set({ currentNumber: nextNum })
+              .where(eq(dgiiSequences.id, seq.id));
 
-          break;
+            return;
+          }
         }
-      }
+      });
 
       if (!ncfOrEcfNumber || !fiscalType) {
         res.status(400).json({
@@ -329,7 +318,7 @@ router.post(
         }))
       );
 
-      const isEcf = fiscalType.startsWith('ECF_');
+      const isEcf = fiscalType != null && String(fiscalType).startsWith('ECF_');
       if (isEcf) {
         const [trans] = await db
           .insert(ecfTransmissions)

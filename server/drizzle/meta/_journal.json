@@ -29,6 +29,13 @@
       "when": 1772740000000,
       "tag": "0004_unique_email_per_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1772748779800,
+      "tag": "0005_document_counters",
+      "breakpoints": true
     }
   ]
 }
