@@ -45,7 +45,7 @@ const loginSchema = z.object({
 
 /**
  * POST /api/auth/register
- * Crea tenant + primer usuario (AdminTenant)
+ * Crea tenant + primer usuario (AdminTenant) en transacción.
  */
 router.post('/register', registerLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
@@ -55,54 +55,50 @@ router.post('/register', registerLimiter, async (req, res) => {
   }
 
   const { email, password, name, tenantName, country } = parsed.data;
+  const emailLower = email.toLowerCase().trim();
 
   try {
-    const [existingTenant] = await db
-      .select()
-      .from(tenants)
-      .where(eq(tenants.name, tenantName))
-      .limit(1);
+    const [newTenant, newUser] = await db.transaction(async (tx) => {
+      const [existingTenant] = await tx
+        .select()
+        .from(tenants)
+        .where(eq(tenants.name, tenantName))
+        .limit(1);
 
-    if (existingTenant) {
-      res.status(409).json({ error: 'Ya existe un tenant con ese nombre' });
-      return;
-    }
+      if (existingTenant) {
+        throw { code: 'TENANT_EXISTS' as const };
+      }
 
-    const isDO = country === 'DO';
-    const [newTenant] = await db
-      .insert(tenants)
-      .values({
-        name: tenantName,
-        plan: 'basic',
-        country: country ?? null,
-        onboardingStatus: 'BASIC',
-        taxMode: isDO ? 'DO_DGII' : 'GENERIC',
-      })
-      .returning();
+      const isDO = country === 'DO';
+      const [t] = await tx
+        .insert(tenants)
+        .values({
+          name: tenantName,
+          plan: 'basic',
+          country: country ?? null,
+          onboardingStatus: 'BASIC',
+          taxMode: isDO ? 'DO_DGII' : 'GENERIC',
+        })
+        .returning();
 
-    if (!newTenant) {
-      res.status(500).json({ error: 'Error al crear tenant' });
-      return;
-    }
+      if (!t) throw new Error('Failed to create tenant');
 
-    const passwordHash = await bcrypt.hash(password, 10);
+      const passwordHash = await bcrypt.hash(password, 10);
+      const [u] = await tx
+        .insert(users)
+        .values({
+          tenantId: t.id,
+          email: emailLower,
+          name: name ?? emailLower.split('@')[0],
+          passwordHash,
+          role: 'AdminTenant',
+          isActive: true,
+        })
+        .returning();
 
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        tenantId: newTenant.id,
-        email,
-        name: name ?? email.split('@')[0],
-        passwordHash,
-        role: 'AdminTenant',
-        isActive: true,
-      })
-      .returning();
-
-    if (!newUser) {
-      res.status(500).json({ error: 'Error al crear usuario' });
-      return;
-    }
+      if (!u) throw new Error('Failed to create user');
+      return [t, u] as const;
+    });
 
     const token = signToken({
       userId: newUser.id,
@@ -130,7 +126,16 @@ router.post('/register', registerLimiter, async (req, res) => {
         taxMode: newTenant.taxMode,
       },
     });
-  } catch (err) {
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'TENANT_EXISTS') {
+      res.status(409).json({ error: 'Ya existe un tenant con ese nombre' });
+      return;
+    }
+    const pgErr = err as { code?: string };
+    if (pgErr?.code === '23505') {
+      res.status(409).json({ error: 'El email ya existe en esta empresa.' });
+      return;
+    }
     console.error('Register error:', err);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
@@ -148,6 +153,7 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 
   const { email, password, tenantId } = parsed.data;
+  const emailLower = email.toLowerCase().trim();
 
   try {
     const [user] = await db
@@ -155,7 +161,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       .from(users)
       .where(
         and(
-          eq(users.email, email),
+          eq(users.email, emailLower),
           eq(users.tenantId, tenantId),
           eq(users.isActive, true)
         )

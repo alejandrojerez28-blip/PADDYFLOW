@@ -144,6 +144,7 @@ export type BillingEvent = typeof billingEvents.$inferSelect;
 export type NewBillingEvent = typeof billingEvents.$inferInsert;
 
 // ============ USERS ============
+// Unique: (tenant_id, lower(email)) — migración 0004_unique_email_per_tenant
 export const users = pgTable(
   'users',
   {
