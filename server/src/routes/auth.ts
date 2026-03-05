@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { db } from '../db/index.js';
@@ -7,6 +8,26 @@ import { eq, and } from 'drizzle-orm';
 import { signToken } from '../middleware/auth.js';
 
 const router = Router();
+
+const isDev = process.env.NODE_ENV === 'development';
+
+// Rate limit: login — 10/15min prod, 50/15min dev
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isDev ? 50 : 10,
+  message: { error: 'Demasiados intentos de login. Intente en 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limit: register — 5/15min prod, 20/15min dev
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isDev ? 20 : 5,
+  message: { error: 'Demasiados intentos de registro. Intente en 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -26,7 +47,7 @@ const loginSchema = z.object({
  * POST /api/auth/register
  * Crea tenant + primer usuario (AdminTenant)
  */
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
@@ -119,7 +140,7 @@ router.post('/register', async (req, res) => {
  * POST /api/auth/login
  * Login con email + password + tenantId (identifica la organización)
  */
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
