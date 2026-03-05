@@ -1,0 +1,496 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1033{\fonttbl{\f0\fnil\fcharset0 Calibri;}{\f1\fnil Calibri;}{\f2\fnil\fcharset1 Cambria Math;}{\f3\fnil\fcharset0 Cambria Math;}}
+{\*\generator Riched20 10.0.19041}{\*\mmathPr\mmathFont2\mwrapIndent1440 }\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\f0\fs22\lang9 # PROMPT PARA CURSOR \f1\emdash  PADDYFLOW (SaaS Multi-Tenant + Stripe + UI 3D \ldblquote Enterprise\rdblquote )\par
+\par
+Act\f0\'faa como un equipo senior compuesto por:\par
+1) **Arquitecto de Software SaaS (Multi-Tenant)**\par
+2) **Ingeniero Full-Stack (React/TS + Node/Express + PostgreSQL/Drizzle)**\par
+3) **CPA (contabilidad lite, CxP/CxC, asientos autom\'e1ticos)**\par
+4) **Ingeniero de Procesos de Arroz (pesada, lotes, rendimiento, granel)**\par
+\par
+## Objetivo\par
+Implementar **PaddyFlow**, un **SaaS multi-tenant** (cobro en USD) con suscripciones online por tarjeta (Stripe Billing), inspirado en el esquema de planes de QuickBooks Online.  \par
+El sistema debe controlar, con poco personal, los procesos:\par
+- Compra de **arroz paddy** (pesada)\par
+- Control log\'edstico (choferes/camiones)\par
+- Env\'edo a **procesador externo**\par
+- Recepci\'f3n a granel en **super sacos (\f2\u8805?\f0 1 ton)**\par
+- Registro de producto terminado y subproductos\par
+- **Rendimiento / Liquidaci\'f3n** por lote y procesador\par
+- Compras/Ventas con facturaci\'f3n simple\par
+- Contabilidad **super sencilla** con asientos autom\'e1ticos\par
+\par
+Adicionalmente, la interfaz debe ser **muy moderna estilo Oracle/NetSuite** y la parte visual debe incluir un **m\'f3dulo 3D** (sin romper lo existente) para representar el flujo operativo.\par
+\par
+---\par
+\par
+# 1) PRINCIPIOS CR\'cdTICOS (NO NEGOCIABLES)\par
+- **No romper nada existente**: si hay c\'f3digo previo, integrar por capas, sin eliminar rutas/componentes; usar feature flags si hace falta.\par
+- **Multi-tenant real**: cada empresa (tenant) debe estar aislada a nivel de datos.\par
+- **Stripe como fuente de verdad** para estado de suscripci\'f3n: `trialing`, `active`, `past_due`, `canceled`.\par
+- **Bloqueo por plan**: l\'edmites de usuarios y features seg\'fan plan. Si se excede: bloquear creaci\'f3n y mostrar upgrade.\par
+- **UI Enterprise**: tablas con filtros avanzados, columnas configurables, \ldblquote saved views\rdblquote , panel lateral (drawer) para editar sin salir.\par
+- **M\'f3dulo 3D**: debe ser un m\'f3dulo nuevo (ruta nueva), alimentado por datos del sistema (lotes, env\'edos, recepciones, inventario), sin modificar flujos core.\par
+\par
+---\par
+\par
+# 2) ARQUITECTURA SUGERIDA (FULL STACK)\par
+## Frontend\par
+- React 18 + Vite + TypeScript\par
+- UI kit (Radix/Headless + Tailwind o equivalente), estilo enterprise\par
+- DataGrid robusto (TanStack Table)\par
+- State management minimalista (React Query + Zustand opcional)\par
+- **M\'f3dulo 3D**: Three.js (React Three Fiber recomendado)\par
+\par
+## Backend\par
+- Node + Express\par
+- PostgreSQL\par
+- Drizzle ORM\par
+- Auth (JWT + Refresh o session cookies)\par
+- RBAC por roles + permisos\par
+\par
+## Infra / SaaS\par
+- Stripe Billing subscriptions + Webhooks\par
+- Tenant isolation v\'eda `tenant_id` en todas las tablas + RLS opcional (si aplica)\par
+- Auditor\'eda de eventos clave\par
+\par
+---\par
+\par
+# 3) MODELO COMERCIAL (USD) \f1\emdash  POR EMPRESA (TENANT)\par
+Planes:\par
+- **Starter**: $29/mo \emdash  1 usuario\par
+- **Essentials**: $59/mo \emdash  hasta 3 usuarios\par
+- **Plus**: $109/mo \emdash  hasta 5 usuarios (MOST POPULAR)\par
+- **Advanced**: $249/mo \emdash  hasta 25 usuarios\par
+Trial: 14 d\f0\'edas\par
+\par
+Add-ons:\par
+- Usuario adicional: $12/mo (cuando excede el l\'edmite del plan)\par
+- Soporte premium: $49/mo\par
+- Onboarding: $299 one-time\par
+\par
+Implementar:\par
+- Tabla `plans` (feature flags y l\'edmites)\par
+- Tabla `subscriptions` (estado, stripe IDs)\par
+- Tabla `usage_counters` o c\'e1lculo din\'e1mico para usuarios\par
+\par
+---\par
+\par
+# 4) DOMINIO / PROCESOS (OPERACIONES DE ARROZ)\par
+## Entidades clave\par
+- **TicketPesada**: compra de paddy\par
+- **LotePaddy**: agrupaci\'f3n de tickets (o 1:1)\par
+- **EnvioProcesador**: salida de paddy a procesador externo\par
+- **RecepcionGranel**: entrada de arroz pulido/subproductos en super sacos\par
+- **LiquidacionRendimiento**: c\'e1lculo rendimiento por lote/procesador\par
+- **Inventario**: almacenes virtuales (Paddy, En Proceso, Arroz, Subproductos)\par
+\par
+## Flujo\par
+1) Pesada entrada paddy \f2\u8594?\f0  genera Ticket \f2\u8594?\f0  actualiza inventario paddy\par
+2) Crear Lote (o auto) \f2\u8594?\f0  consolidaci\'f3n de paddy\par
+3) Env\'edo a procesador externo \f2\u8594?\f0  mueve inventario a \ldblquote En Proceso Externo\rdblquote\par
+4) Recepci\'f3n granel \f2\u8594?\f0  crea existencias Arroz/Subproductos y reduce \ldblquote En Proceso\rdblquote\par
+5) Liquidaci\'f3n \f2\u8594?\f0  calcula % rendimiento, % subproductos, merma; crea alertas\par
+6) Ventas/Despachos \f2\u8594?\f0  factura + conduce + salida inventario\par
+7) Compras/Pagos \f2\u8594?\f0  CxP\par
+8) Contabilidad Lite \f2\u8594?\f0  asientos autom\'e1ticos por evento\par
+\par
+---\par
+\par
+# 5) CONTABILIDAD LITE (CPA MODE)\par
+## Cuentas m\'ednimas\par
+- Caja, Banco\par
+- CxC, CxP\par
+- Inventario Paddy\par
+- Inventario Arroz Pulido\par
+- Inventario Subproductos (opcional)\par
+- Ventas Arroz\par
+- Ventas Subproductos\par
+- Costo de Ventas\par
+- Gastos (Transporte, Generales)\par
+\par
+## Asientos autom\'e1ticos (ejemplos)\par
+- Compra paddy (si a cr\'e9dito): Dr Inventario Paddy / Cr CxP\par
+- Pago suplidor: Dr CxP / Cr Banco\par
+- Venta: Dr CxC o Banco / Cr Ventas\par
+- Costo por salida inventario: Dr Costo Ventas / Cr Inventario\par
+- (Opcional) Registro gasto procesamiento externo: Dr Gasto Procesamiento / Cr CxP\par
+\par
+No crear un m\'f3dulo contable complejo. Solo:\par
+- Cat\'e1logo\par
+- Asientos generados (solo lectura)\par
+- Reportes b\'e1sicos (Resultados, Balance simplificado, CxC/CxP)\par
+\par
+---\par
+\par
+# 6) M\'d3DULO \ldblquote TERCEROS (PARTNERS)\rdblquote  \f1\emdash  CLIENTES/PROVEEDORES/PROCESADORES\par
+Crear un m\f0\'f3dulo \'fanico **Cat\'e1logos \f2\u8594?\f0  Terceros** con roles:\par
+- Proveedor (paddy)\par
+- Cliente (compra arroz/subproductos)\par
+- Procesador externo\par
+- Transportista (si aplica)\par
+\par
+Un tercero puede tener m\'faltiples roles (multirol).\par
+\par
+---\par
+\par
+# 7) UI/UX ENTERPRISE (ORACLE-LIKE)\par
+## Layout\par
+- Topbar fija: b\'fasqueda global + notificaciones + usuario\par
+- Sidebar colapsable (por defecto cerrado tras navegar)\par
+- \'c1rea central: KPI cards + DataGrid + tabs internos\par
+- Drawer lateral para ver/editar registro sin salir de la tabla\par
+\par
+## Reglas de tablas\par
+- Filtros por columna\par
+- Ordenamiento\par
+- Columnas configurables\par
+- Guardar \ldblquote vistas\rdblquote  (Saved Views) por usuario\par
+- Exportar CSV/Excel\par
+\par
+## Pantallas MVP\par
+1) Dashboard (KPIs + tareas + alertas)\par
+2) Operaciones > Pesada\par
+3) Operaciones > Env\'edos a Procesador\par
+4) Operaciones > Recepci\'f3n Granel\par
+5) Operaciones > Rendimiento/Liquidaci\'f3n (pantalla estrella)\par
+6) Inventario (existencias + movimientos)\par
+7) Compras (CxP/pagos)\par
+8) Ventas (facturas + conduce + CxC/cobros)\par
+9) Cat\'e1logos (Terceros, Choferes, Camiones, Productos/Subproductos)\par
+10) Seguridad (usuarios/roles)\par
+11) Billing (plan actual, upgrades, facturas, m\'e9todo de pago)\par
+\par
+---\par
+\par
+# 8) M\'d3DULO 3D (NUEVO) \f1\emdash  \ldblquote PaddyFlow Ops 3D\rdblquote\par
+## Objetivo visual\par
+Un tablero 3D \ldblquote nivel Tesla/Spacex\rdblquote  que muestre el flujo:\par
+**Recepci\f0\'f3n/Pesada \f2\u8594?\f0  Paddy Storage \f2\u8594?\f0  En Proceso Externo \f2\u8594?\f0  Recepci\'f3n Granel \f2\u8594?\f0  Inventario Final \f2\u8594?\f0  Despachos**\par
+\par
+## Requisitos 3D\par
+- Ruta nueva: `/ops-3d`\par
+- No modificar procesos core; solo leer datos.\par
+- Representar nodos como estaciones 3D (cajas/edificios) conectadas con l\'edneas/flujo animado.\par
+- Datos en \ldblquote tooltips\rdblquote  al hover:\par
+  - Toneladas hoy/semana\par
+  - Lotes en proceso\par
+  - Rendimiento promedio\par
+  - Alertas (rendimiento bajo) como color/\'edcono\par
+- Controles:\par
+  - zoom, orbit, focus por nodo\par
+  - selector de per\'edodo (hoy/semana/mes)\par
+- Performance:\par
+  - evitar modelos pesados; usar geometr\'eda simple + text labels\par
+  - lazy loading del m\'f3dulo\par
+\par
+## Datos m\'ednimos que consume\par
+- Conteos de tickets de pesada por d\'eda\par
+- Toneladas enviadas a procesador y recibidas\par
+- Inventario actual por categor\'eda\par
+- Alertas de rendimiento\par
+\par
+---\par
+\par
+# 9) STRIPE BILLING \f1\emdash  IMPLEMENTACI\f0\'d3N\par
+## Necesario\par
+- Crear productos y precios en Stripe para cada plan (monthly + yearly)\par
+- Guardar en DB:\par
+  - `stripe_customer_id`\par
+  - `stripe_subscription_id`\par
+  - `stripe_price_id`\par
+  - `subscription_status`\par
+  - `current_period_end`\par
+\par
+## Webhooks (obligatorios)\par
+- `customer.subscription.created`\par
+- `customer.subscription.updated`\par
+- `customer.subscription.deleted`\par
+- `invoice.paid`\par
+- `invoice.payment_failed`\par
+- `checkout.session.completed`\par
+\par
+Reglas:\par
+- Estado `past_due` \f2\u8594?\f0  app en modo \ldblquote solo lectura\rdblquote  o bloquear creaci\'f3n de registros cr\'edticos.\par
+- `canceled` \f2\u8594?\f0  bloquear login o mostrar paywall.\par
+- `trialing` \f2\u8594?\f0  permitir full acceso hasta fin del trial.\par
+\par
+## Billing Portal\par
+- Implementar Stripe Customer Portal para:\par
+  - actualizar tarjeta\par
+  - descargar invoices\par
+  - cambiar plan (upgrade/downgrade)\par
+  - cancelar\par
+\par
+---\par
+\par
+# 10) SEGURIDAD Y PERMISOS (RBAC)\par
+Roles base:\par
+- Owner (admin total)\par
+- Admin (operativo + finanzas)\par
+- Operator (pesada/operaciones)\par
+- Viewer (solo lectura)\par
+\par
+Permisos por m\'f3dulo y acci\'f3n (create/update/approve/delete/export).\par
+\par
+---\par
+\par
+# 11) BASE DE DATOS \f1\emdash  TABLAS (MINIMO VIABLE)\par
+Crear migraciones con Drizzle para:\par
+\par
+## SaaS / Auth\par
+- `tenants` (empresa)\par
+- `users` (con `tenant_id`)\par
+- `roles`, `permissions`, `user_roles` (o un esquema simple inicial)\par
+- `plans`\par
+- `subscriptions`\par
+- `audit_logs` (opcional MVP)\par
+\par
+## Cat\f0\'e1logos\par
+- `partners` (terceros)\par
+- `partner_roles` (o flags)\par
+- `drivers`\par
+- `vehicles`\par
+- `products` (arroz, subproductos)\par
+\par
+## Operaciones\par
+- `weigh_tickets`\par
+- `lots`\par
+- `processor_shipments`\par
+- `bulk_receipts`\par
+- `yield_settlements`\par
+- `yield_alerts` (o calculado)\par
+\par
+## Inventario\par
+- `warehouses` (virtuales)\par
+- `inventory_balances`\par
+- `inventory_movements`\par
+\par
+## Ventas/Compras\par
+- `sales_invoices`, `sales_invoice_lines`\par
+- `delivery_notes` (conduce)\par
+- `purchase_bills`, `purchase_bill_lines`\par
+- `payments` (cobros y pagos)\par
+\par
+## Contabilidad Lite\par
+- `coa_accounts`\par
+- `journal_entries`\par
+- `journal_lines`\par
+\par
+**Regla:** todas las tablas operativas deben tener `tenant_id`.\par
+\par
+---\par
+\par
+# 12) ENTREGABLES\par
+Quiero que implementes en orden:\par
+1) Esqueleto SaaS multi-tenant (tenants/users/auth)\par
+2) Planes + suscripci\'f3n Stripe + gating por plan\par
+3) Cat\'e1logo Terceros + Choferes/Camiones\par
+4) Pesada + Lotes + Inventario b\'e1sico\par
+5) Env\'edos a procesador + Recepci\'f3n granel\par
+6) Rendimiento/Liquidaci\'f3n (pantalla estrella)\par
+7) Compras/Ventas + CxP/CxC\par
+8) Contabilidad lite (asientos autom\'e1ticos)\par
+9) M\'f3dulo 3D `/ops-3d` leyendo datos reales\par
+\par
+Incluye:\par
+- UI moderna enterprise\par
+- componentes reutilizables (DataGrid, DrawerForm, KPI Cards)\par
+- validaciones y manejo de errores\par
+\par
+---\par
+\par
+# 13) RESTRICCIONES Y CALIDAD\par
+- C\'f3digo limpio, modular, sin hacks.\par
+- Tests m\'ednimos (unitarios para c\'e1lculo de rendimiento y asientos).\par
+- Seed de datos demo por tenant (para demo de venta).\par
+- Documentar en README:\par
+  - c\'f3mo correr local\par
+  - c\'f3mo configurar Stripe keys y webhooks\par
+  - c\'f3mo crear productos/precios\par
+  - c\'f3mo probar el gating por plan\par
+\par
+---\par
+\par
+# 14) DEFINICIONES IMPORTANTES DEL NEGOCIO (para no inventar)\par
+- Recepci\'f3n a granel en **super sacos \f2\u8805?\f0  1 ton**\par
+- El sistema calcula rendimiento por lote:  \par
+  `rendimiento_arroz = arroz_pulido_ton / paddy_enviado_ton`\par
+- Subproductos configurables: cascarilla, afrecho, 1/2, 1/4, 3/4, otros\par
+- No hay \ldblquote maquila interna\rdblquote ; es **procesamiento externo**.\par
+\par
+---\par
+\par
+## INSTRUCCI\'d3N FINAL\par
+Empieza creando el **modelo multi-tenant + Stripe + gating** primero.\par
+No avances a m\'f3dulos operativos sin que Billing est\'e9 funcionando.\par
+Luego construye Operaciones e Inventario, y finalmente el m\'f3dulo 3D.\par
+\par
+Entrega commits peque\'f1os, con mensajes claros, y evita cambios masivos.\par
+\f3 # \f0 ADDENDUM\f3  \f0 PARA\f3  \f0 CURSOR\f3  \f2\emdash\f3  \f0 IMPRESI\'d3N\f3  (\f0 PESADAS\f3 , \f0 REPORTES\f3  \f0 Y\f3  \f0 DOCUMENTOS\f3 ) \f0 EN\f3  \f0 PADDYFLOW\par
+\par
+Act\'faa\f3  \f0 como\f3  \f0 Arquitecto\f3  \f0 de\f3  \f0 Software\f3  + \f0 Ingeniero\f3  \f0 Full\f3 -\f0 Stack\f3  + \f0 CPA\f3  + \f0 Ingeniero\f3  \f0 de\f3  \f0 Procesos\f3 .\f0\par
+Debes\f3  \f0 agregar\f3  \f0 **capacidad\f3  \f0 de\f3  \f0 impresi\'f3n\f3  \f0 profesional**\f3  \f0 a\f3  \f0 todo\f3  \f0 el\f3  \f0 sistema\f3 , \f0 especialmente\f3  \f0 **Pesadas**\f3  \f0 y\f3  \f0 **Reportes**\f3 , \f0 sin\f3  \f0 romper\f3  \f0 nada\f3  \f0 existente\f3 .\f0\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 1\f3 ) \f0 OBJETIVO\f3  \f0 DE\f3  \f0 IMPRESI\'d3N\par
+El\f3  \f0 sistema\f3  \f0 debe\f3  \f0 permitir\f3 :\f0\par
+\f3 - \f0 **Imprimir\f3  \f0 Tickets\f3  \f0 de\f3  \f0 Pesada**\f3  (\f0 individual\f3  \f0 y\f3  \f0 en\f3  \f0 batch\f3 )\f0\par
+\f3 - \f0 **Imprimir\f3  \f0 Reportes**\f3  (\f0 inventario\f3 , \f0 rendimiento\f3 , \f0 compras\f3 /\f0 ventas\f3 , \f0 CxP\f3 /\f0 CxC\f3 )\f0\par
+\f3 - \f0 **Exportar\f3  \f0 PDF**\f3  (\f0 y\f3  \f0 opcionalmente\f3  \f0 Excel\f3 /\f0 CSV\f3 )\f0\par
+\f3 - \f0 Mantener\f3  \f0 un\f3  \f0 dise\'f1o\f3  \f0 **enterprise**\f3  \f0 y\f3  \f0 consistente\f3 , \f0 con\f3  \f0 encabezado\f3  \f0 y\f3  \f0 numeraci\'f3n\f3 .\f0\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 2\f3 ) \f0 ALCANCE\f3  \f0 MVP\f3  \f0 DE\f3  \f0 IMPRESI\'d3N\f3  (\f0 OBLIGATORIO\f3 )\f0\par
+\f3 ### \f0 A\f3 ) \f0 Pesadas\f3  (\f0 Weigh\f3  \f0 Tickets\f3 )\f0\par
+\f3 - \f0 Bot\'f3n\f3  \f0 **Imprimir**\f3  \f0 en\f3  \f0 el\f3  \f0 Drawer\f3  \f0 del\f3  \f0 ticket\f3 .\f0\par
+\f3 - \f0 Bot\'f3n\f3  \f0 **Imprimir\f3  \f0 selecci\'f3n**\f3  \f0 desde\f3  \f0 la\f3  \f0 tabla\f3  (\f0 multi\f3 -\f0 select\f3 ).\f0\par
+\f3 - \f0 Bot\'f3n\f3  \f0 **Descargar\f3  \f0 PDF**\f3  (\f0 mismo\f3  \f0 dise\'f1o\f3  \f0 de\f3  \f0 impresi\'f3n\f3 ).\f0\par
+\f3 - \f0 El\f3  \f0 ticket\f3  \f0 debe\f3  \f0 incluir\f3  \f0 un\f3  \f0 **n\'famero\f3  \f0 consecutivo**\f3 : \f0 `WT\f3 -\f0 000001`\f3  (\f0 por\f3  \f0 tenant\f3 ).\f0\par
+\par
+Campos\f3  \f0 m\'ednimos\f3  \f0 visibles\f3 :\f0\par
+\f3 - \f0 Empresa\f3  (\f0 Tenant\f3 ) + \f0 logo\f3  (\f0 si\f3  \f0 hay\f3 )\f0\par
+\f3 - \f0 Ticket\f3  \f0 No\f3 .\f0\par
+\f3 - \f0 Fecha\f3  \f0 y\f3  \f0 hora\par
+\f3 - \f0 Proveedor\f3  (\f0 partner\f3 )\f0\par
+\f3 - \f0 Chofer\f3 , \f0 Placa\f3 , \f0 Veh\'edculo\par
+\f3 - \f0 Producto\f3  (\f0 Paddy\f3 )\f0\par
+\f3 - \f0 Peso\f3  \f0 Bruto\f3 , \f0 Tara\f3 , \f0 Neto\f3  (\f0 con\f3  \f0 unidades\f3 )\f0\par
+\f3 - \f0 Observaciones\par
+\f3 - \f0 Firma\f3  (\f0 l\'edneas\f3 : \f0 Operador\f3  / \f0 Chofer\f3  / \f0 Supervisor\f3 )\f0\par
+\f3 - \f0 QR\f3  \f0 opcional\f3  (\f0 para\f3  \f0 verificar\f3  \f0 ticket\f3  \f0 en\f3  \f0 pantalla\f3 )\f0\par
+\par
+\f3 ### \f0 B\f3 ) \f0 Reportes\par
+Cada\f3  \f0 reporte\f3  \f0 debe\f3  \f0 tener\f3 :\f0\par
+\f3 - \f0 Encabezado\f3  (\f0 Tenant\f3  + \f0 nombre\f3  \f0 del\f3  \f0 reporte\f3  + \f0 rango\f3  \f0 de\f3  \f0 fecha\f3  + \f0 usuario\f3  \f0 que\f3  \f0 imprime\f3 )\f0\par
+\f3 - \f0 Totales\f3  \f0 al\f3  \f0 final\par
+\f3 - \f0 Paginaci\'f3n\par
+\f3 - \f0 Tabla\f3  \f0 legible\f3  \f0 y\f3  \f0 alineada\par
+\f3 - \f0 Fecha\f3 /\f0 hora\f3  \f0 de\f3  \f0 impresi\'f3n\par
+\par
+Reportes\f3  \f0 m\'ednimos\f3  \f0 imprimibles\f3 :\f0\par
+\f3 - \f0 Rendimiento\f3 /\f0 Liquidaci\'f3n\f3  (\f0 por\f3  \f0 lote\f3  \f0 y\f3  \f0 por\f3  \f0 procesador\f3 )\f0\par
+\f3 - \f0 Inventario\f3  (\f0 existencias\f3  \f0 y\f3  \f0 movimientos\f3 )\f0\par
+\f3 - \f0 Compras\f3  (\f0 CxP\f3  \f0 y\f3  \f0 pagos\f3 )\f0\par
+\f3 - \f0 Ventas\f3  (\f0 CxC\f3  \f0 y\f3  \f0 cobros\f3 )\f0\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 3\f3 ) \f0 IMPLEMENTACI\'d3N\f3  \f0 T\'c9CNICA\f3  \f0 RECOMENDADA\f3  (\f0 SIN\f3  \f0 DEPENDER\f3  \f0 DEL\f3  \f0 NAVEGADOR\f3 )\f0\par
+\f3 ### \f0 Opci\'f3n\f3  \f0 recomendada\f3  \f0 para\f3  \f0 MVP\f3  (\f0 r\'e1pida\f3  \f0 y\f3  \f0 s\'f3lida\f3 ):\f0\par
+**Generaci\'f3n\f3  \f0 de\f3  \f0 PDF\f3  \f0 en\f3  \f0 backend**\f3  \f0 con\f3  \f0 plantillas\f3  \f0 HTML\f3 :\f0\par
+\f3 - \f0 Endpoint\f3 : \f0 `GET\f3  /\f0 api\f3 /\f0 print\f3 /\f0 weigh\f3 -\f0 ticket\f3 /:\f0 id\f3 .\f0 pdf`\par
+\f3 - \f0 Endpoint\f3 : \f0 `POST\f3  /\f0 api\f3 /\f0 print\f3 /\f0 weigh\f3 -\f0 tickets\f3 /\f0 batch\f3 .\f0 pdf`\f3  (\f0 lista\f3  \f0 de\f3  \f0 IDs\f3 )\f0\par
+\f3 - \f0 Endpoint\f3 : \f0 `GET\f3  /\f0 api\f3 /\f0 print\f3 /\f0 report\f3 /:\f0 reportType\f3 .\f0 pdf\f3 ?\f0 from\f3 =...&\f0 to\f3 =...&\f0 filters\f3 =...\f0 `\par
+\par
+Motor\f3  \f0 PDF\f3  (\f0 elige\f3  \f0 1\f3 ):\f0\par
+\f3 - \f0 Playwright\f3  (\f0 HTML\f3  \f2\u8594?\f3  \f0 PDF\f3 ) \f0 recomendado\f3  \f0 por\f3  \f0 calidad\f3  \f0 y\f3  \f0 CSS\par
+\f3 - \f0 o\f3  \f0 Puppeteer\par
+\par
+Ventajas\f3 :\f0\par
+\f3 - \f0 PDF\f3  \f0 consistente\f3  \f0 en\f3  \f0 cualquier\f3  \f0 dispositivo\par
+\f3 - \f0 Sirve\f3  \f0 para\f3  \f0 impresi\'f3n\f3  \f0 y\f3  \f0 descarga\par
+\f3 - \f0 Permite\f3  \f0 numeraci\'f3n\f3 , \f0 encabezados\f3  \f0 y\f3  \f0 paginaci\'f3n\par
+\par
+\f3 ### \f0 Alternativa\f3  \f0 frontend\f3  (\f0 secundaria\f3 ):\f0\par
+\f3 - \f0\ldblquote Print\f3  \f0 view\rdblquote\f3  \f0 HTML\f3  + \f0 `window\f3 .\f0 print\f3 ()\f0 `\par
+\f3 - \f0\'datil\f3  \f0 como\f3  \f0 fallback\f3 , \f0 pero\f3  \f0 **no\f3  \f0 debe\f3  \f0 ser\f3  \f0 la\f3  \f0\'fanica**\f3 .\f0\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 4\f3 ) \f0 DISE\'d1O\f3  (\f0 ORACLE\f3 -\f0 LIKE\f3 )\f0\par
+Estilo\f3  \f0 documento\f3 :\f0\par
+\f3 - \f0 Margen\f3  \f0 12\f2\endash\f0 15mm\par
+\f3 - \f0 Tipograf\'eda\f3  \f0 limpia\f3  (\f0 Inter\f3 /\f0 Roboto\f3 )\f0\par
+\f3 - \f0 Header\f3  \f0 con\f3  \f0 logo\f3  \f0 y\f3  \f0 datos\f3  \f0 fiscales\f3  (\f0 configurable\f3 )\f0\par
+\f3 - \f0 Tabla\f3  \f0 con\f3  \f0 bordes\f3  \f0 suaves\f3 , \f0 filas\f3  \f0 alternas\par
+\f3 - \f0 Totales\f3  \f0 en\f3  \f0 bloque\f3  \f0 separado\par
+\f3 - \f0 Footer\f3  \f0 con\f3 :\f0\par
+\f3   - \f0\ldblquote Printed\f3  \f0 by\f3  \{\f0 user\f3\} \f0 on\f3  \{\f0 timestamp\f3\}\f0\rdblquote\par
+\f3   - \f0\ldblquote Page\f3  \f0 X\f3  \f0 of\f3  \f0 Y\rdblquote\par
+\par
+Tama\'f1os\f3 :\f0\par
+\f3 - \f0 Por\f3  \f0 defecto\f3 : \f0 **Letter\f3  (\f0 8\f3 .\f0 5x11\f3 )\f0 **\f3  \f0 para\f3  \f0 reportes\par
+\f3 - \f0 Ticket\f3  \f0 de\f3  \f0 pesada\f3 :\f0\par
+\f3   - \f0 Letter\f3  (\f0 si\f3  \f0 impresora\f3  \f0 normal\f3 )\f0\par
+\f3   - \f0 y\f3  \f0 opcional\f3  \f0\ldblquote Ticket\f3 /\f0 Receipt\rdblquote\f3  (\f0 80mm\f3 ) \f0 como\f3  \f0 fase\f3  \f0 2\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 5\f3 ) \f0 CONFIGURACI\'d3N\f3  \f0 POR\f3  \f0 TENANT\par
+Crear\f3  \f0 settings\f3 :\f0\par
+\f3 - \f0 `tenant\f3 _\f0 settings`\f3 :\f0\par
+\f3   - \f0 `company\f3 _\f0 name`\par
+\f3   - \f0 `logo\f3 _\f0 url`\par
+\f3   - \f0 `tax\f3 _\f0 id`\f3  (\f0 si\f3  \f0 aplica\f3 )\f0\par
+\f3   - \f0 `address`\par
+\f3   - \f0 `phone`\par
+\f3   - \f0 `print\f3 _\f0 paper\f3 _\f0 size\f3 _\f0 default`\f3  (\f0 LETTER\f3 /\f0 A4\f3 )\f0\par
+\f3   - \f0 `ticket\f3 _\f0 prefix`\f3  (\f0 WT\f3 )\f0\par
+\f3   - \f0 `report\f3 _\f0 footer\f3 _\f0 text`\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 6\f3 ) \f0 CONSECUTIVOS\f3  (\f0 CR\'cdTICO\f3 )\f0\par
+Implementar\f3  \f0 consecutivos\f3  \f0 por\f3  \f0 tenant\f3 :\f0\par
+\f3 - \f0 Tabla\f3  \f0 `sequences`\f3 :\f0\par
+\f3   - \f0 `tenant\f3 _\f0 id`\par
+\f3   - \f0 `key`\f3  (\f0 e\f3 .\f0 g\f3 . \f0 `WEIGH\f3 _\f0 TICKET`\f3 )\f0\par
+\f3   - \f0 `current\f3 _\f0 value`\par
+\f3 - \f0 Al\f3  \f0 crear\f3  \f0 un\f3  \f0 ticket\f3 : \f0 asignar\f3  \f0 `WT\f3 -\f0 000001`\f3  \f0 y\f3  \f0 aumentar\f3  \f0 secuencia\f3 .\f0\par
+\f3 - \f0 Debe\f3  \f0 ser\f3  \f0 transaccional\f3  (\f0 evitar\f3  \f0 duplicados\f3 ).\f0\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 7\f3 ) \f0 PERMISOS\par
+\f3 - \f0 Solo\f3  \f0 roles\f3  \f0 autorizados\f3  \f0 pueden\f3  \f0 imprimir\f3 :\f0\par
+\f3   - \f0 Operator\f3 : \f0 imprimir\f3  \f0 ticket\par
+\f3   - \f0 Admin\f3 /\f0 Owner\f3 : \f0 imprimir\f3  \f0 reportes\f3  \f0 y\f3  \f0 batch\par
+\f3 - \f0 Registrar\f3  \f0 en\f3  \f0 `audit\f3 _\f0 logs`\f3  \f0 cada\f3  \f0 impresi\'f3n\f3 :\f0\par
+\f3   - \f0 tipo\f3  \f0 documento\f3 , \f0 id\f3 , \f0 usuario\f3 , \f0 fecha\f3 /\f0 hora\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 8\f3 ) \f0 UI\f3 /\f0 UX\f3  (\f0 BOTONES\f3  \f0 Y\f3  \f0 FLUJOS\f3 )\f0\par
+En\f3  \f0 DataGrid\f3  \f0 de\f3  \f0 Pesadas\f3 :\f0\par
+\f3 - \f0 Checkbox\f3  \f0 multi\f3 -\f0 select\par
+\f3 - \f0 Acci\'f3n\f3 : \f0 **Print**\par
+\f3 - \f0 Acci\'f3n\f3 : \f0 **Download\f3  \f0 PDF**\par
+\f3 - \f0 Acci\'f3n\f3 : \f0 **Email**\f3  (\f0 fase\f3  \f0 2\f3 )\f0\par
+\par
+En\f3  \f0 cada\f3  \f0 Reporte\f3 :\f0\par
+\f3 - \f0 **Print**\par
+\f3 - \f0 **Download\f3  \f0 PDF**\par
+\f3 - (\f0 CSV\f3 /\f0 Excel\f3  \f0 opcional\f3 )\f0\par
+\par
+Al\f3  \f0 presionar\f3  \f0 imprimir\f3 :\f0\par
+\f3 - \f0 Mostrar\f3  \f0 preview\f3  (\f0 modal\f3 ) \f0 o\f3  \f0 descargar\f3  \f0 directo\f3  \f0 PDF\par
+\f3 - \f0\ldblquote Open\f3  \f0 in\f3  \f0 new\f3  \f0 tab\rdblquote\f3  \f0 recomendado\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 9\f3 ) \f0 PRUEBAS\f3  (\f0 M\'cdNIMAS\f3 )\f0\par
+\f3 - \f0 Unit\f3  \f0 test\f3 : \f0 formato\f3  \f0 de\f3  \f0 consecutivo\par
+\f3 - \f0 Test\f3 : \f0 PDF\f3  \f0 endpoint\f3  \f0 devuelve\f3  \f0 `application\f3 /\f0 pdf`\par
+\f3 - \f0 Snapshot\f3  \f0 test\f3  \f0 simple\f3  (\f0 si\f3  \f0 aplica\f3 ) \f0 del\f3  \f0 HTML\f3  \f0 de\f3  \f0 plantilla\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 10\f3 ) \f0 ENTREGABLE\par
+1\f3 ) \f0 PDFs\f3  \f0 para\f3 : \f0 Ticket\f3  \f0 de\f3  \f0 Pesada\f3  + \f0 Rendimiento\f3  + \f0 Inventario\f3  + \f0 CxP\f3 /\f0 CxC\par
+2\f3 ) \f0 Botones\f3  \f0 UI\f3  \f0 integrados\par
+3\f3 ) \f0 Secuencias\f3  \f0 por\f3  \f0 tenant\par
+4\f3 ) \f0 Settings\f3  \f0 por\f3  \f0 tenant\f3  (\f0 logo\f3 /\f0 encabezado\f3 )\f0\par
+5\f3 ) \f0 Auditor\'eda\f3  \f0 de\f3  \f0 impresi\'f3n\par
+\par
+\f3 ---\f0\par
+\par
+\f3 ## \f0 INSTRUCCI\'d3N\f3  \f0 FINAL\par
+Implementa\f3  \f0 impresi\'f3n\f3  \f0 como\f3  \f0 PDF\f3  \f0 server\f3 -\f0 side\f3  \f0 primero\f3  (\f0 Playwright\f3 /\f0 Puppeteer\f3 ).\f0\par
+Luego\f3  \f0 a\'f1ade\f3  \f0 print\f3 -\f0 view\f3  \f0 frontend\f3  \f0 como\f3  \f0 fallback\f3 .\f0\par
+NO\f3  \f0 avanzar\f3  \f0 a\f3  \f0 features\f3  \f0 nuevas\f3  \f0 sin\f3  \f0 que\f3  \f0 Tickets\f3  \f0 y\f3  \f0 Reportes\f3  \f0 impriman\f3  \f0 bien\f3  \f0 y\f3  \f0 consistente\f3 .\par
+\f0\lang9\par
+}
+ 
