@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { getAuthToken, setAuthToken, getAuthHeaders as getAuthHeadersFromApi } from '../api/auth';
 
 interface AuthContextType {
   token: string | null;
@@ -9,26 +10,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setTokenState] = useState<string | null>(() =>
-    localStorage.getItem('paddyflow_token')
-  );
+  const [token, setTokenState] = useState<string | null>(() => getAuthToken());
 
   const setToken = useCallback((t: string | null) => {
     setTokenState(t);
-    if (t) localStorage.setItem('paddyflow_token', t);
-    else localStorage.removeItem('paddyflow_token');
+    setAuthToken(t);
   }, []);
 
   const getAuthHeaders = useCallback((): { Authorization?: string } => {
-    const t = token ?? localStorage.getItem('paddyflow_token');
-    if (!t) return {};
-    return { Authorization: `Bearer ${t}` };
-  }, [token]);
+    return getAuthHeadersFromApi();
+  }, []);
 
   return (
     <AuthContext.Provider
       value={{
-        token: token ?? localStorage.getItem('paddyflow_token'),
+        token: token ?? getAuthToken(),
         setToken,
         getAuthHeaders,
       }}

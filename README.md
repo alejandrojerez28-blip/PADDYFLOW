@@ -244,3 +244,9 @@ Las lecturas (GET) siempre se permiten.
 ## Gating por onboarding fiscal
 
 El middleware `requireFiscalReadyForWrites` bloquea facturas fiscales si `onboardingStatus != FISCAL_READY`. Proforma siempre permitida.
+
+---
+
+## Seguridad
+
+Ver [docs/security.md](docs/security.md). **Token:** actualmente se usa `sessionStorage` como mitigación; migración a cookie HttpOnly planificada.
