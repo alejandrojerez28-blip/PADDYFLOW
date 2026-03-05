@@ -4,7 +4,15 @@ import { db } from '../db/index.js';
 import { users, tenants } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 
-const JWT_SECRET = process.env.JWT_SECRET ?? 'dev-secret-change-me';
+// Fail-fast: no fallback. Server must not start without JWT_SECRET.
+const rawSecret = process.env.JWT_SECRET;
+if (!rawSecret) {
+  throw new Error(
+    'FATAL: JWT_SECRET must be set. Set it in .env or environment. The server cannot start without it.'
+  );
+}
+const JWT_SECRET: string = rawSecret;
+
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN ?? '7d') as string | number;
 
 export interface JwtPayload {
@@ -18,7 +26,10 @@ export interface JwtPayload {
  * Genera un JWT para el usuario
  */
 export function signToken(payload: Omit<JwtPayload, 'role'> & { role?: string }): string {
-  const signOptions: SignOptions = { expiresIn: JWT_EXPIRES_IN as SignOptions['expiresIn'] };
+  const signOptions: SignOptions = {
+    expiresIn: JWT_EXPIRES_IN as SignOptions['expiresIn'],
+    algorithm: 'HS256',
+  };
   return jwt.sign(
     {
       userId: payload.userId,
@@ -49,7 +60,9 @@ export async function authMiddleware(
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+    }) as unknown as JwtPayload;
 
     const [userRow] = await db
       .select()
