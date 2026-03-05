@@ -6,6 +6,8 @@ const COUNTER_CONFIG: Record<string, { prefix: string; padLength: number }> = {
   PROFORMA: { prefix: 'PF', padLength: 6 },
   FISCAL_INVOICE: { prefix: 'FV', padLength: 6 },
   PURCHASE: { prefix: 'PU', padLength: 6 },
+  WEIGH_TICKET: { prefix: 'WT', padLength: 6 },
+  LOT: { prefix: 'LOT', padLength: 6 },
 };
 
 /**
@@ -43,7 +45,7 @@ export async function allocateDocumentNumber(
       return `${config.prefix}-${String(num).padStart(config.padLength, '0')}`;
     }
 
-    // Crear counter: inicializar desde MAX existente (solo PROFORMA)
+    // Crear counter: inicializar desde MAX existente (PROFORMA, WEIGH_TICKET)
     // Limitación: si no hay docs previos o parseo falla, nextNum=1
     let maxExisting = 0;
     if (key === 'PROFORMA') {
@@ -55,6 +57,38 @@ export async function allocateDocumentNumber(
             ELSE 0 END
           ), 0)::int as max_num FROM sales_documents 
           WHERE tenant_id = ${tenantId} AND kind = 'PROFORMA'`
+        );
+        const rows = Array.isArray(result) ? result : [];
+        const row = rows[0] as { max_num?: number } | undefined;
+        maxExisting = Number(row?.max_num ?? 0);
+      } catch {
+        maxExisting = 0;
+      }
+    } else if (key === 'WEIGH_TICKET') {
+      try {
+        const result = await tx.execute(
+          sql`SELECT COALESCE(MAX(
+            CASE WHEN ticket_number ~ '^WT-[0-9]+$' 
+            THEN CAST(SUBSTRING(ticket_number FROM 4) AS INT) 
+            ELSE 0 END
+          ), 0)::int as max_num FROM weigh_tickets 
+          WHERE tenant_id = ${tenantId}`
+        );
+        const rows = Array.isArray(result) ? result : [];
+        const row = rows[0] as { max_num?: number } | undefined;
+        maxExisting = Number(row?.max_num ?? 0);
+      } catch {
+        maxExisting = 0;
+      }
+    } else if (key === 'LOT') {
+      try {
+        const result = await tx.execute(
+          sql`SELECT COALESCE(MAX(
+            CASE WHEN code ~ '^LOT-[0-9]+$' 
+            THEN CAST(SUBSTRING(code FROM 5) AS INT) 
+            ELSE 0 END
+          ), 0)::int as max_num FROM lots 
+          WHERE tenant_id = ${tenantId}`
         );
         const rows = Array.isArray(result) ? result : [];
         const row = rows[0] as { max_num?: number } | undefined;

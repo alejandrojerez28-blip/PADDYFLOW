@@ -76,6 +76,24 @@ export const documentKindEnum = pgEnum('document_kind', [
 // Estado de documento
 export const documentStatusEnum = pgEnum('document_status', ['DRAFT', 'ISSUED', 'CANCELED']);
 
+// Tipo de pesada
+export const weighTicketTypeEnum = pgEnum('weigh_ticket_type', ['PADDY', 'SUBPRODUCT', 'OTHER']);
+
+// Estado de lote
+export const lotStatusEnum = pgEnum('lot_status', ['OPEN', 'SENT', 'RECEIVED', 'CLOSED']);
+
+// Estado de envío
+export const shipmentStatusEnum = pgEnum('shipment_status', ['CREATED', 'IN_TRANSIT', 'DELIVERED']);
+
+// Categoría de item (inventario)
+export const itemCategoryEnum = pgEnum('item_category', ['FINISHED', 'SUBPRODUCT', 'OTHER']);
+
+// Dirección de movimiento inventario
+export const inventoryDirectionEnum = pgEnum('inventory_direction', ['IN', 'OUT', 'ADJUST']);
+
+// Tipo de referencia del movimiento
+export const inventoryRefTypeEnum = pgEnum('inventory_ref_type', ['BULK_RECEIPT', 'SALE', 'PURCHASE', 'MANUAL']);
+
 // Estado transmisión e-CF
 export const ecfProviderStatusEnum = pgEnum('ecf_provider_status', [
   'PENDING_SEND',
@@ -207,6 +225,7 @@ export const customers = pgTable(
     address: varchar('address', { length: 512 }),
     email: varchar('email', { length: 255 }),
     phone: varchar('phone', { length: 64 }),
+    isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -214,7 +233,139 @@ export const customers = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [index('customers_tenant_id_idx').on(table.tenantId)]
+  (table) => [
+    index('customers_tenant_id_idx').on(table.tenantId),
+    index('customers_tenant_active_idx').on(table.tenantId, table.isActive),
+  ]
+);
+
+// ============ SUPPLIERS (proveedores/suplidores) ============
+export const suppliers = pgTable(
+  'suppliers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 255 }).notNull(),
+    rncOrId: varchar('rnc_or_id', { length: 64 }),
+    phone: varchar('phone', { length: 64 }),
+    address: varchar('address', { length: 512 }),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('suppliers_tenant_name_idx').on(table.tenantId, table.name),
+    index('suppliers_tenant_active_idx').on(table.tenantId, table.isActive),
+  ]
+);
+
+// ============ PROCESSORS (procesadores externos) ============
+export const processors = pgTable(
+  'processors',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 255 }).notNull(),
+    contactName: varchar('contact_name', { length: 255 }),
+    phone: varchar('phone', { length: 64 }),
+    address: varchar('address', { length: 512 }),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('processors_tenant_name_idx').on(table.tenantId, table.name),
+    index('processors_tenant_active_idx').on(table.tenantId, table.isActive),
+  ]
+);
+
+// ============ DRIVERS (choferes) ============
+export const drivers = pgTable(
+  'drivers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 255 }).notNull(),
+    idNumber: varchar('id_number', { length: 64 }),
+    phone: varchar('phone', { length: 64 }),
+    license: varchar('license', { length: 64 }),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('drivers_tenant_name_idx').on(table.tenantId, table.name),
+    index('drivers_tenant_active_idx').on(table.tenantId, table.isActive),
+  ]
+);
+
+// ============ TRUCKS (camiones) ============
+export const trucks = pgTable(
+  'trucks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    plate: varchar('plate', { length: 32 }).notNull(),
+    capacityKg: varchar('capacity_kg', { length: 32 }),
+    owner: varchar('owner', { length: 255 }),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('trucks_tenant_plate_idx').on(table.tenantId, table.plate),
+    index('trucks_tenant_active_idx').on(table.tenantId, table.isActive),
+    unique('trucks_tenant_plate_unique').on(table.tenantId, table.plate),
+  ]
+);
+
+// ============ LOTS (lotes) ============
+export const lots = pgTable(
+  'lots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 32 }).notNull(),
+    status: lotStatusEnum('status').default('OPEN').notNull(),
+    notes: varchar('notes', { length: 1024 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('lots_tenant_code_unique').on(table.tenantId, table.code),
+    index('lots_tenant_created_idx').on(table.tenantId, table.createdAt),
+    index('lots_tenant_status_idx').on(table.tenantId, table.status),
+  ]
 );
 
 // ============ DGII SEQUENCES (NCF/e-CF) ============
@@ -338,6 +489,14 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
+export type Supplier = typeof suppliers.$inferSelect;
+export type NewSupplier = typeof suppliers.$inferInsert;
+export type Processor = typeof processors.$inferSelect;
+export type NewProcessor = typeof processors.$inferInsert;
+export type Driver = typeof drivers.$inferSelect;
+export type NewDriver = typeof drivers.$inferInsert;
+export type Truck = typeof trucks.$inferSelect;
+export type NewTruck = typeof trucks.$inferInsert;
 export type DgiiSequence = typeof dgiiSequences.$inferSelect;
 export type NewDgiiSequence = typeof dgiiSequences.$inferInsert;
 export type SalesDocument = typeof salesDocuments.$inferSelect;
@@ -346,3 +505,225 @@ export type SalesDocumentItem = typeof salesDocumentItems.$inferSelect;
 export type NewSalesDocumentItem = typeof salesDocumentItems.$inferInsert;
 export type EcfTransmission = typeof ecfTransmissions.$inferSelect;
 export type NewEcfTransmission = typeof ecfTransmissions.$inferInsert;
+
+// ============ WEIGH TICKETS (Pesadas) ============
+export const weighTickets = pgTable(
+  'weigh_tickets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    ticketNumber: varchar('ticket_number', { length: 32 }),
+    type: weighTicketTypeEnum('type').notNull(),
+    datetime: timestamp('datetime', { withTimezone: true }).notNull(),
+    supplierId: uuid('supplier_id').references(() => suppliers.id, { onDelete: 'set null' }),
+    driverId: uuid('driver_id').references(() => drivers.id, { onDelete: 'set null' }),
+    truckId: uuid('truck_id').references(() => trucks.id, { onDelete: 'set null' }),
+    grossKg: decimal('gross_kg', { precision: 14, scale: 4 }).notNull(),
+    tareKg: decimal('tare_kg', { precision: 14, scale: 4 }).notNull(),
+    netKg: decimal('net_kg', { precision: 14, scale: 4 }).notNull(),
+    notes: varchar('notes', { length: 1024 }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('weigh_tickets_tenant_datetime_idx').on(table.tenantId, table.datetime),
+    index('weigh_tickets_tenant_type_idx').on(table.tenantId, table.type),
+    index('weigh_tickets_tenant_supplier_idx').on(table.tenantId, table.supplierId),
+    index('weigh_tickets_tenant_driver_idx').on(table.tenantId, table.driverId),
+    index('weigh_tickets_tenant_truck_idx').on(table.tenantId, table.truckId),
+  ]
+);
+
+export type WeighTicket = typeof weighTickets.$inferSelect;
+export type NewWeighTicket = typeof weighTickets.$inferInsert;
+
+// ============ LOT INPUTS (pesadas asociadas al lote) ============
+export const lotInputs = pgTable(
+  'lot_inputs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    lotId: uuid('lot_id')
+      .notNull()
+      .references(() => lots.id, { onDelete: 'cascade' }),
+    weighTicketId: uuid('weigh_ticket_id')
+      .notNull()
+      .references(() => weighTickets.id, { onDelete: 'cascade' }),
+    netKg: decimal('net_kg', { precision: 14, scale: 4 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('lot_inputs_tenant_lot_ticket_unique').on(table.tenantId, table.lotId, table.weighTicketId),
+    index('lot_inputs_tenant_lot_idx').on(table.tenantId, table.lotId),
+  ]
+);
+
+// ============ SHIPMENTS (envíos a procesador) ============
+export const shipments = pgTable(
+  'shipments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    lotId: uuid('lot_id')
+      .notNull()
+      .references(() => lots.id, { onDelete: 'cascade' }),
+    processorId: uuid('processor_id')
+      .notNull()
+      .references(() => processors.id, { onDelete: 'cascade' }),
+    shipDate: timestamp('ship_date', { withTimezone: true }),
+    driverId: uuid('driver_id').references(() => drivers.id, { onDelete: 'set null' }),
+    truckId: uuid('truck_id').references(() => trucks.id, { onDelete: 'set null' }),
+    shippedKg: decimal('shipped_kg', { precision: 14, scale: 4 }),
+    status: shipmentStatusEnum('status').default('CREATED').notNull(),
+    notes: varchar('notes', { length: 1024 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('shipments_tenant_lot_idx').on(table.tenantId, table.lotId),
+    index('shipments_tenant_processor_idx').on(table.tenantId, table.processorId),
+    index('shipments_tenant_shipdate_idx').on(table.tenantId, table.shipDate),
+  ]
+);
+
+// ============ BULK RECEIPTS (recepción granel - super sacos) ============
+export const bulkReceipts = pgTable(
+  'bulk_receipts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    lotId: uuid('lot_id')
+      .notNull()
+      .references(() => lots.id, { onDelete: 'cascade' }),
+    receiptDate: timestamp('receipt_date', { withTimezone: true }).notNull(),
+    superSacksCount: integer('super_sacks_count').default(0).notNull(),
+    totalKg: decimal('total_kg', { precision: 14, scale: 4 }).notNull(),
+    notes: varchar('notes', { length: 1024 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('bulk_receipts_tenant_lot_idx').on(table.tenantId, table.lotId),
+    index('bulk_receipts_tenant_receiptdate_idx').on(table.tenantId, table.receiptDate),
+  ]
+);
+
+// ============ ITEMS (productos / subproductos) ============
+export const items = pgTable(
+  'items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 255 }).notNull(),
+    sku: varchar('sku', { length: 64 }),
+    category: itemCategoryEnum('category').notNull(),
+    uom: varchar('uom', { length: 16 }).default('kg').notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('items_tenant_name_unique').on(table.tenantId, table.name),
+    index('items_tenant_category_idx').on(table.tenantId, table.category),
+    index('items_tenant_active_idx').on(table.tenantId, table.isActive),
+  ]
+);
+
+// ============ INVENTORY MOVES (kardex) ============
+export const inventoryMoves = pgTable(
+  'inventory_moves',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    datetime: timestamp('datetime', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    direction: inventoryDirectionEnum('direction').notNull(),
+    qtyKg: decimal('qty_kg', { precision: 14, scale: 4 }).notNull(),
+    refType: inventoryRefTypeEnum('ref_type').notNull(),
+    refId: uuid('ref_id'),
+    notes: varchar('notes', { length: 1024 }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('inventory_moves_tenant_item_datetime_idx').on(table.tenantId, table.itemId, table.datetime),
+    index('inventory_moves_tenant_reftype_datetime_idx').on(table.tenantId, table.refType, table.datetime),
+  ]
+);
+
+// ============ BULK RECEIPT SPLITS (distribución por item) ============
+export const bulkReceiptSplits = pgTable(
+  'bulk_receipt_splits',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    bulkReceiptId: uuid('bulk_receipt_id')
+      .notNull()
+      .references(() => bulkReceipts.id, { onDelete: 'cascade' }),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+    qtyKg: decimal('qty_kg', { precision: 14, scale: 4 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('bulk_receipt_splits_tenant_receipt_item_unique').on(table.tenantId, table.bulkReceiptId, table.itemId),
+    index('bulk_receipt_splits_tenant_receipt_idx').on(table.tenantId, table.bulkReceiptId),
+  ]
+);
+
+export type Lot = typeof lots.$inferSelect;
+export type NewLot = typeof lots.$inferInsert;
+export type LotInput = typeof lotInputs.$inferSelect;
+export type NewLotInput = typeof lotInputs.$inferInsert;
+export type Shipment = typeof shipments.$inferSelect;
+export type NewShipment = typeof shipments.$inferInsert;
+export type BulkReceipt = typeof bulkReceipts.$inferSelect;
+export type NewBulkReceipt = typeof bulkReceipts.$inferInsert;
+export type Item = typeof items.$inferSelect;
+export type NewItem = typeof items.$inferInsert;
+export type InventoryMove = typeof inventoryMoves.$inferSelect;
+export type NewInventoryMove = typeof inventoryMoves.$inferInsert;
+export type BulkReceiptSplit = typeof bulkReceiptSplits.$inferSelect;
+export type NewBulkReceiptSplit = typeof bulkReceiptSplits.$inferInsert;

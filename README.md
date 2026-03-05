@@ -2,6 +2,23 @@
 
 SaaS multi-tenant para gestión de procesos de arroz (pesadas, lotes, envíos, inventario, contabilidad).
 
+## Documentación
+
+- [Guía rápida](docs/quickstart.md) — Registro, conceptos, flujo operativo
+- [FAQ](docs/faq.md) — Preguntas frecuentes
+- [Limitaciones](docs/limitations.md) — e-CF/DGII, token, etc.
+- [Seguridad](docs/security.md) — Token, CORS, medidas
+
+## Support
+
+Configura soporte en el cliente con variables de entorno (archivo `client/.env` o en el build):
+
+- `VITE_SUPPORT_EMAIL` — Email de soporte
+- `VITE_SUPPORT_WHATSAPP` — Número WhatsApp (ej. 18095551234)
+- `VITE_SUPPORT_URL` — URL de página de soporte
+
+Si alguna está definida, se muestra "¿Necesitas ayuda? Contactar soporte" en Home y Dashboard.
+
 ## Requisitos
 
 - Node.js 18+

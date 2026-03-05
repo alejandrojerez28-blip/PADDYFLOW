@@ -12,6 +12,17 @@ import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import dgiiSequencesRoutes from './routes/dgiiSequences.js';
 import salesRoutes from './routes/sales.js';
 import reportsRoutes from './routes/reports.js';
+import weighTicketsRoutes from './routes/weighTickets.js';
+import suppliersRoutes from './routes/suppliers.js';
+import processorsRoutes from './routes/processors.js';
+import customersRoutes from './routes/customers.js';
+import driversRoutes from './routes/drivers.js';
+import trucksRoutes from './routes/trucks.js';
+import lotsRoutes from './routes/lots.js';
+import itemsRoutes from './routes/items.js';
+import inventoryRoutes from './routes/inventory.js';
+import bulkReceiptsRoutes from './routes/bulkReceipts.js';
+import onboardingRoutes from './routes/onboarding.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -50,6 +61,12 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'paddyflow-api' });
 });
 
+// Docs estáticos (markdown) — solo en dev o si existen
+const docsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs');
+if (fs.existsSync(docsPath)) {
+  app.use('/docs', express.static(docsPath));
+}
+
 // Rutas públicas
 app.use('/api/auth', authRoutes);
 
@@ -59,6 +76,17 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/dgii/sequences', dgiiSequencesRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/weigh-tickets', weighTicketsRoutes);
+app.use('/api/suppliers', suppliersRoutes);
+app.use('/api/processors', processorsRoutes);
+app.use('/api/customers', customersRoutes);
+app.use('/api/drivers', driversRoutes);
+app.use('/api/trucks', trucksRoutes);
+app.use('/api/lots', lotsRoutes);
+app.use('/api/items', itemsRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/bulk-receipts', bulkReceiptsRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 
 // Servir cliente React si existe client/dist (producción / Replit)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

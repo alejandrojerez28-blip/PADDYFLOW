@@ -7,6 +7,15 @@ import BillingSuccess from './pages/BillingSuccess';
 import BillingCancel from './pages/BillingCancel';
 import FiscalSettings from './pages/FiscalSettings';
 import Sales from './pages/Sales';
+import WeighTickets from './pages/WeighTickets';
+import WeighTicketPrint from './pages/WeighTicketPrint';
+import ThirdParties from './pages/ThirdParties';
+import Lots from './pages/Lots';
+import LotDetail from './pages/LotDetail';
+import Inventory from './pages/Inventory';
+import YieldReport from './pages/YieldReport';
+import LegalTerms from './pages/LegalTerms';
+import LegalPrivacy from './pages/LegalPrivacy';
 
 export default function App() {
   return (
@@ -18,6 +27,15 @@ export default function App() {
           <Route path="/settings/billing" element={<BillingSettings />} />
           <Route path="/settings/fiscal" element={<FiscalSettings />} />
           <Route path="/sales" element={<Sales />} />
+          <Route path="/weigh-tickets" element={<WeighTickets />} />
+          <Route path="/third-parties" element={<ThirdParties />} />
+          <Route path="/lots" element={<Lots />} />
+          <Route path="/lots/:id" element={<LotDetail />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/reports/yield" element={<YieldReport />} />
+          <Route path="/legal/terms" element={<LegalTerms />} />
+          <Route path="/legal/privacy" element={<LegalPrivacy />} />
+          <Route path="/print/weigh-ticket/:id" element={<WeighTicketPrint />} />
           <Route path="/billing/success" element={<BillingSuccess />} />
           <Route path="/billing/cancel" element={<BillingCancel />} />
         </Routes>
