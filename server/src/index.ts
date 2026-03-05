@@ -1,4 +1,7 @@
 import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
@@ -38,6 +41,17 @@ app.use('/api/dgii/sequences', dgiiSequencesRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/reports', reportsRoutes);
 
-app.listen(PORT, () => {
-  console.log(`PaddyFlow API running on http://localhost:${PORT}`);
+// Servir cliente React si existe client/dist (producción / Replit)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
+const HOST = process.env.HOST ?? '0.0.0.0';
+app.listen(Number(PORT), HOST, () => {
+  console.log(`PaddyFlow API running on http://${HOST}:${PORT}`);
 });
