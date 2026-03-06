@@ -1,21 +1,9 @@
-# PaddyFlow - Replit configuration
 entrypoint = "server/src/index.ts"
 
-onBoot = "npm install && cd server && npm install && cd ../client && npm install"
-
-[run]
-command = "npm run dev"
-
-[run.env]
-NODE_ENV = "development"
-
 [nix]
-channel = "stable-23_11"
+channel = "stable-25_05"
 
 [deployment]
 build = "npm run build"
 run = "npm run start"
 deploymentTarget = "cloudrun"
-
-[gitHubImport]
-requiredFiles = [".replit", "replit.nix"]

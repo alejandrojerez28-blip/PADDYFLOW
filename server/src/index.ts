@@ -27,20 +27,18 @@ import onboardingRoutes from './routes/onboarding.js';
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-// CORS: restringir a APP_BASE_URL (comma-separated) o localhost:5173 en dev
+// CORS: APP_BASE_URL (comma-separated), localhost:5000, o dominios Replit
 const allowedOriginsRaw = process.env.APP_BASE_URL?.split(',').map((s) => s.trim()).filter(Boolean);
 const allowedOrigins =
-  allowedOriginsRaw && allowedOriginsRaw.length > 0 ? allowedOriginsRaw : ['http://localhost:5173'];
-if (process.env.NODE_ENV !== 'production' && !allowedOrigins.includes('http://localhost:5173')) {
-  allowedOrigins.push('http://localhost:5173');
-}
+  allowedOriginsRaw && allowedOriginsRaw.length > 0 ? allowedOriginsRaw : ['http://localhost:5000'];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // Postman, curl, server-to-server
+      if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
-      callback(null, false); // Rechazar origen no permitido
+      if (origin.endsWith('.replit.dev') || origin.endsWith('.repl.co')) return callback(null, true);
+      callback(null, false);
     },
     credentials: true,
   })
