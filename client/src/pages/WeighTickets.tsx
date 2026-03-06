@@ -20,6 +20,7 @@ interface WeighTicket {
   tareKg: string;
   netKg: string;
   notes: string | null;
+  hasQuality?: boolean;
 }
 
 interface Supplier {
@@ -73,6 +74,8 @@ export default function WeighTickets() {
   const [error, setError] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<WeighTicket | null>(null);
+  const [qualityDrawerOpen, setQualityDrawerOpen] = useState(false);
+  const [qualityTicket, setQualityTicket] = useState<WeighTicket | null>(null);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -159,6 +162,77 @@ export default function WeighTickets() {
   const handlePrint = (id: string) => {
     window.location.href = `/print/weigh-ticket/${id}`;
   };
+
+  const handleOpenQuality = (row: WeighTicket) => {
+    setQualityTicket(row);
+    setQualityDrawerOpen(true);
+  };
+
+  const handleQualitySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!qualityTicket) return;
+    const form = e.currentTarget;
+    const moisturePct = (form.elements.namedItem('moisturePct') as HTMLInputElement).value;
+    const impurityPct = (form.elements.namedItem('impurityPct') as HTMLInputElement).value;
+    const brokenPct = (form.elements.namedItem('brokenPct') as HTMLInputElement).value;
+    const chalkyPct = (form.elements.namedItem('chalkyPct') as HTMLInputElement).value;
+    const remarks = (form.elements.namedItem('remarks') as HTMLInputElement).value || null;
+
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/weigh-tickets/${qualityTicket.id}/quality`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          moisturePct: moisturePct ? parseFloat(moisturePct) : null,
+          impurityPct: impurityPct ? parseFloat(impurityPct) : null,
+          brokenPct: brokenPct ? parseFloat(brokenPct) : null,
+          chalkyPct: chalkyPct ? parseFloat(chalkyPct) : null,
+          remarks,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? 'Error');
+      }
+      setQualityDrawerOpen(false);
+      setQualityTicket(null);
+      fetchList();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const [qualityData, setQualityData] = useState<{
+    moisturePct: string | null;
+    impurityPct: string | null;
+    brokenPct: string | null;
+    chalkyPct: string | null;
+    remarks: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (qualityTicket && qualityDrawerOpen) {
+      fetch(`${API_URL}/weigh-tickets/${qualityTicket.id}/quality`, { headers: getAuthHeaders() })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) {
+            setQualityData({
+              moisturePct: data.moisturePct ?? '',
+              impurityPct: data.impurityPct ?? '',
+              brokenPct: data.brokenPct ?? '',
+              chalkyPct: data.chalkyPct ?? '',
+              remarks: data.remarks ?? '',
+            });
+          } else {
+            setQualityData({ moisturePct: '', impurityPct: '', brokenPct: '', chalkyPct: '', remarks: '' });
+          }
+        })
+        .catch(() => setQualityData({ moisturePct: '', impurityPct: '', brokenPct: '', chalkyPct: '', remarks: '' }));
+    } else {
+      setQualityData(null);
+    }
+  }, [qualityTicket, qualityDrawerOpen, getAuthHeaders]);
 
   const handleExportExcel = async () => {
     const params = new URLSearchParams({ format: 'xlsx' });
@@ -354,6 +428,7 @@ export default function WeighTickets() {
             <th style={{ textAlign: 'right', padding: 8 }}>Bruto (kg)</th>
             <th style={{ textAlign: 'right', padding: 8 }}>Tara (kg)</th>
             <th style={{ textAlign: 'right', padding: 8 }}>Neto (kg)</th>
+            <th style={{ textAlign: 'center', padding: 8 }}>Calidad</th>
             <th style={{ textAlign: 'left', padding: 8 }}>Notas</th>
             <th style={{ textAlign: 'center', padding: 8 }}>Acciones</th>
           </tr>
@@ -365,13 +440,25 @@ export default function WeighTickets() {
               <td style={{ padding: 8 }}>{row.ticketNumber ?? row.id.slice(0, 8)}</td>
               <td style={{ padding: 8 }}>{row.type}</td>
               <td style={{ padding: 8 }}>{row.supplierName ?? '-'}</td>
+              <td style={{ padding: 8 }}>{row.driverName ?? '-'}</td>
+              <td style={{ padding: 8 }}>{row.truckPlate ?? '-'}</td>
               <td style={{ padding: 8, textAlign: 'right' }}>{parseFloat(row.grossKg).toLocaleString()}</td>
               <td style={{ padding: 8, textAlign: 'right' }}>{parseFloat(row.tareKg).toLocaleString()}</td>
               <td style={{ padding: 8, textAlign: 'right' }}>{parseFloat(row.netKg).toLocaleString()}</td>
+              <td style={{ padding: 8, textAlign: 'center' }}>
+                {row.hasQuality ? (
+                  <span style={{ color: '#10b981', fontWeight: 600 }} title="Con análisis">✓</span>
+                ) : (
+                  <span style={{ color: '#f59e0b' }} title="Pendiente">○</span>
+                )}
+              </td>
               <td style={{ padding: 8, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {row.notes ?? '-'}
               </td>
               <td style={{ padding: 8, textAlign: 'center' }}>
+                <button onClick={() => handleOpenQuality(row)} style={{ ...btnStyle('#8b5cf6'), padding: '6px 12px', marginRight: 4 }}>
+                  Análisis
+                </button>
                 <button onClick={() => handleEdit(row)} style={{ ...btnStyle('#64748b'), padding: '6px 12px', marginRight: 4 }}>
                   Editar
                 </button>
@@ -505,6 +592,109 @@ export default function WeighTickets() {
                   {editing ? 'Guardar' : 'Crear'}
                 </button>
                 <button type="button" onClick={() => setDrawerOpen(false)} style={btnStyle('#64748b')}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Drawer Análisis de calidad */}
+      {qualityDrawerOpen && qualityTicket && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => { setQualityDrawerOpen(false); setQualityTicket(null); }}
+        >
+          <div
+            style={{
+              background: '#1e293b',
+              padding: 24,
+              borderRadius: 12,
+              maxWidth: 420,
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: 8 }}>Análisis de calidad</h3>
+            <p style={{ color: '#94a3b8', fontSize: 14, marginBottom: 20 }}>
+              Pesada {qualityTicket.ticketNumber ?? qualityTicket.id.slice(0, 8)}
+            </p>
+            <form onSubmit={handleQualitySubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <label>
+                <span style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#94a3b8' }}>Humedad (%)</span>
+                <input
+                  name="moisturePct"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  placeholder="0-100"
+                  defaultValue={qualityData?.moisturePct ?? ''}
+                  style={inputStyle}
+                />
+              </label>
+              <label>
+                <span style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#94a3b8' }}>Impurezas (%)</span>
+                <input
+                  name="impurityPct"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  placeholder="0-100"
+                  defaultValue={qualityData?.impurityPct ?? ''}
+                  style={inputStyle}
+                />
+              </label>
+              <label>
+                <span style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#94a3b8' }}>Grano quebrado (%)</span>
+                <input
+                  name="brokenPct"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  placeholder="Opcional"
+                  defaultValue={qualityData?.brokenPct ?? ''}
+                  style={inputStyle}
+                />
+              </label>
+              <label>
+                <span style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#94a3b8' }}>Yesoso (%)</span>
+                <input
+                  name="chalkyPct"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  placeholder="Opcional"
+                  defaultValue={qualityData?.chalkyPct ?? ''}
+                  style={inputStyle}
+                />
+              </label>
+              <label>
+                <span style={{ display: 'block', marginBottom: 4, fontSize: 12, color: '#94a3b8' }}>Observaciones</span>
+                <input
+                  name="remarks"
+                  type="text"
+                  placeholder="Opcional"
+                  defaultValue={qualityData?.remarks ?? ''}
+                  style={inputStyle}
+                />
+              </label>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button type="submit" style={btnStyle('#10b981')}>Guardar</button>
+                <button type="button" onClick={() => { setQualityDrawerOpen(false); setQualityTicket(null); }} style={btnStyle('#64748b')}>
                   Cancelar
                 </button>
               </div>

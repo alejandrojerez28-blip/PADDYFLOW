@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import supplierPriceRulesRoutes from './supplierPriceRules.js';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { suppliers } from '../db/schema.js';
@@ -23,6 +24,9 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial().extend({ isActive: z.boolean().optional() });
+
+// Nested: /api/suppliers/:id/price-rules (must be before /:id)
+router.use('/:id/price-rules', supplierPriceRulesRoutes);
 
 /**
  * GET /api/suppliers?search=&active=

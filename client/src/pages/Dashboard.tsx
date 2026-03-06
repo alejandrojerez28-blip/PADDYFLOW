@@ -149,6 +149,7 @@ export default function Dashboard() {
         <Link to="/settings/fiscal" style={{ color: '#0ea5e9' }}>Configuración Fiscal RD</Link>
         <Link to="/sales" style={{ color: '#0ea5e9' }}>Ventas</Link>
         <Link to="/weigh-tickets" style={{ color: '#0ea5e9' }}>Pesadas</Link>
+        <Link to="/settlements" style={{ color: '#0ea5e9' }}>Liquidaciones</Link>
         <Link to="/third-parties" style={{ color: '#0ea5e9' }}>Terceros</Link>
         <Link to="/lots" style={{ color: '#0ea5e9' }}>Lotes</Link>
         <Link to="/inventory" style={{ color: '#0ea5e9' }}>Inventario</Link>

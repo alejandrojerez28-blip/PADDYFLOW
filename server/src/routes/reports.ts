@@ -14,6 +14,8 @@ import {
   bulkReceipts,
   bulkReceiptSplits,
   shipments,
+  supplierSettlements,
+  supplierSettlementLines,
 } from '../db/schema.js';
 import { eq, desc, and, gte, lte, inArray } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
@@ -744,6 +746,93 @@ router.get(
     } catch (err) {
       console.error('Yield export error:', err);
       res.status(500).json({ error: 'Error al exportar rendimiento' });
+    }
+  }
+);
+
+/**
+ * GET /api/reports/supplier-settlements/export?format=xlsx&from=&to=&supplierId=
+ */
+router.get(
+  '/supplier-settlements/export',
+  authMiddleware,
+  tenantContextMiddleware,
+  requireTenantMiddleware,
+  async (req, res) => {
+    if (!req.tenantId) {
+      res.status(403).json({ error: 'Contexto de tenant no disponible' });
+      return;
+    }
+
+    const format = req.query.format as string;
+    if (format !== 'xlsx') {
+      res.status(400).json({ error: 'Formato no soportado. Use format=xlsx' });
+      return;
+    }
+
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+    const supplierId = req.query.supplierId as string | undefined;
+
+    try {
+      const conditions = [eq(supplierSettlements.tenantId, req.tenantId)];
+      if (from) conditions.push(gte(supplierSettlements.periodFrom, from));
+      if (to) conditions.push(lte(supplierSettlements.periodTo, to));
+      if (supplierId) conditions.push(eq(supplierSettlements.supplierId, supplierId));
+
+      const settlements = await db
+        .select({
+          id: supplierSettlements.id,
+          periodFrom: supplierSettlements.periodFrom,
+          periodTo: supplierSettlements.periodTo,
+          status: supplierSettlements.status,
+          totalNetKg: supplierSettlements.totalNetKg,
+          grossAmount: supplierSettlements.grossAmount,
+          deductions: supplierSettlements.deductions,
+          netPayable: supplierSettlements.netPayable,
+          supplierName: suppliers.name,
+        })
+        .from(supplierSettlements)
+        .leftJoin(suppliers, eq(supplierSettlements.supplierId, suppliers.id))
+        .where(and(...conditions))
+        .orderBy(desc(supplierSettlements.createdAt))
+        .limit(500);
+
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Liquidaciones');
+
+      sheet.columns = [
+        { header: 'Proveedor', key: 'supplierName', width: 24 },
+        { header: 'Desde', key: 'periodFrom', width: 12 },
+        { header: 'Hasta', key: 'periodTo', width: 12 },
+        { header: 'Estado', key: 'status', width: 10 },
+        { header: 'Net Kg', key: 'totalNetKg', width: 12 },
+        { header: 'Bruto', key: 'grossAmount', width: 12 },
+        { header: 'Deducciones', key: 'deductions', width: 12 },
+        { header: 'Neto a pagar', key: 'netPayable', width: 14 },
+      ];
+      sheet.getRow(1).font = { bold: true };
+
+      for (const s of settlements) {
+        sheet.addRow({
+          supplierName: s.supplierName ?? '',
+          periodFrom: s.periodFrom ?? '',
+          periodTo: s.periodTo ?? '',
+          status: s.status,
+          totalNetKg: parseFloat(s.totalNetKg),
+          grossAmount: parseFloat(s.grossAmount),
+          deductions: parseFloat(s.deductions),
+          netPayable: parseFloat(s.netPayable),
+        });
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="liquidaciones_${req.tenantId.slice(0, 8)}_${dateStr}.xlsx"`);
+      await workbook.xlsx.write(res);
+    } catch (err) {
+      console.error('Supplier settlements export error:', err);
+      res.status(500).json({ error: 'Error al exportar liquidaciones' });
     }
   }
 );

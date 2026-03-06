@@ -94,6 +94,12 @@ export const inventoryDirectionEnum = pgEnum('inventory_direction', ['IN', 'OUT'
 // Tipo de referencia del movimiento
 export const inventoryRefTypeEnum = pgEnum('inventory_ref_type', ['BULK_RECEIPT', 'SALE', 'PURCHASE', 'MANUAL']);
 
+// Modo de redondeo para liquidaciones
+export const roundingModeEnum = pgEnum('rounding_mode', ['NONE', 'ROUND_2', 'ROUND_0']);
+
+// Estado de liquidación a suplidor
+export const settlementStatusEnum = pgEnum('settlement_status', ['DRAFT', 'APPROVED', 'PAID', 'CANCELED']);
+
 // Estado transmisión e-CF
 export const ecfProviderStatusEnum = pgEnum('ecf_provider_status', [
   'PENDING_SEND',
@@ -713,6 +719,133 @@ export const bulkReceiptSplits = pgTable(
   ]
 );
 
+// ============ WEIGH TICKET QUALITY (análisis por pesada) ============
+export const weighTicketQuality = pgTable(
+  'weigh_ticket_quality',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    weighTicketId: uuid('weigh_ticket_id')
+      .notNull()
+      .references(() => weighTickets.id, { onDelete: 'cascade' }),
+    sampleDate: timestamp('sample_date', { withTimezone: true }).defaultNow().notNull(),
+    moisturePct: decimal('moisture_pct', { precision: 5, scale: 2 }),
+    impurityPct: decimal('impurity_pct', { precision: 5, scale: 2 }),
+    brokenPct: decimal('broken_pct', { precision: 5, scale: 2 }),
+    chalkyPct: decimal('chalky_pct', { precision: 5, scale: 2 }),
+    remarks: varchar('remarks', { length: 1024 }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('weigh_ticket_quality_weigh_ticket_unique').on(table.weighTicketId),
+    index('weigh_ticket_quality_tenant_ticket_idx').on(table.tenantId, table.weighTicketId),
+  ]
+);
+
+// ============ SUPPLIER PRICE RULES (reglas de pago por suplidor) ============
+export const supplierPriceRules = pgTable(
+  'supplier_price_rules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id, { onDelete: 'cascade' }),
+    effectiveFrom: date('effective_from').notNull(),
+    basePricePerKg: decimal('base_price_per_kg', { precision: 12, scale: 4 }).notNull(),
+    currency: varchar('currency', { length: 8 }).default('DOP').notNull(),
+    moistureBasePct: decimal('moisture_base_pct', { precision: 5, scale: 2 }).default('14.00').notNull(),
+    moisturePenaltyPerPct: decimal('moisture_penalty_per_pct', { precision: 12, scale: 4 }).default('0').notNull(),
+    impurityBasePct: decimal('impurity_base_pct', { precision: 5, scale: 2 }).default('1.00').notNull(),
+    impurityPenaltyPerPct: decimal('impurity_penalty_per_pct', { precision: 12, scale: 4 }).default('0').notNull(),
+    roundingMode: roundingModeEnum('rounding_mode').default('ROUND_2').notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('supplier_price_rules_tenant_supplier_from_idx').on(table.tenantId, table.supplierId, table.effectiveFrom),
+    index('supplier_price_rules_tenant_supplier_active_idx').on(table.tenantId, table.supplierId, table.isActive),
+  ]
+);
+
+// ============ SUPPLIER SETTLEMENTS (liquidaciones) ============
+export const supplierSettlements = pgTable(
+  'supplier_settlements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id, { onDelete: 'cascade' }),
+    periodFrom: date('period_from').notNull(),
+    periodTo: date('period_to').notNull(),
+    status: settlementStatusEnum('status').default('DRAFT').notNull(),
+    totalNetKg: decimal('total_net_kg', { precision: 14, scale: 4 }).default('0').notNull(),
+    grossAmount: decimal('gross_amount', { precision: 14, scale: 4 }).default('0').notNull(),
+    deductions: decimal('deductions', { precision: 14, scale: 4 }).default('0').notNull(),
+    netPayable: decimal('net_payable', { precision: 14, scale: 4 }).default('0').notNull(),
+    notes: varchar('notes', { length: 1024 }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('supplier_settlements_tenant_supplier_idx').on(table.tenantId, table.supplierId),
+    index('supplier_settlements_tenant_status_idx').on(table.tenantId, table.status),
+    index('supplier_settlements_tenant_period_idx').on(table.tenantId, table.periodFrom, table.periodTo),
+  ]
+);
+
+// ============ SUPPLIER SETTLEMENT LINES ============
+export const supplierSettlementLines = pgTable(
+  'supplier_settlement_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    settlementId: uuid('settlement_id')
+      .notNull()
+      .references(() => supplierSettlements.id, { onDelete: 'cascade' }),
+    weighTicketId: uuid('weigh_ticket_id')
+      .notNull()
+      .references(() => weighTickets.id, { onDelete: 'cascade' }),
+    netKg: decimal('net_kg', { precision: 14, scale: 4 }).notNull(),
+    pricePerKg: decimal('price_per_kg', { precision: 12, scale: 4 }).notNull(),
+    moisturePct: decimal('moisture_pct', { precision: 5, scale: 2 }),
+    impurityPct: decimal('impurity_pct', { precision: 5, scale: 2 }),
+    penaltyAmount: decimal('penalty_amount', { precision: 14, scale: 4 }).default('0').notNull(),
+    lineAmount: decimal('line_amount', { precision: 14, scale: 4 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique('supplier_settlement_lines_weigh_ticket_unique').on(table.weighTicketId),
+    index('supplier_settlement_lines_tenant_settlement_idx').on(table.tenantId, table.settlementId),
+  ]
+);
+
 export type Lot = typeof lots.$inferSelect;
 export type NewLot = typeof lots.$inferInsert;
 export type LotInput = typeof lotInputs.$inferSelect;
@@ -727,3 +860,11 @@ export type InventoryMove = typeof inventoryMoves.$inferSelect;
 export type NewInventoryMove = typeof inventoryMoves.$inferInsert;
 export type BulkReceiptSplit = typeof bulkReceiptSplits.$inferSelect;
 export type NewBulkReceiptSplit = typeof bulkReceiptSplits.$inferInsert;
+export type WeighTicketQuality = typeof weighTicketQuality.$inferSelect;
+export type NewWeighTicketQuality = typeof weighTicketQuality.$inferInsert;
+export type SupplierPriceRule = typeof supplierPriceRules.$inferSelect;
+export type NewSupplierPriceRule = typeof supplierPriceRules.$inferInsert;
+export type SupplierSettlement = typeof supplierSettlements.$inferSelect;
+export type NewSupplierSettlement = typeof supplierSettlements.$inferInsert;
+export type SupplierSettlementLine = typeof supplierSettlementLines.$inferSelect;
+export type NewSupplierSettlementLine = typeof supplierSettlementLines.$inferInsert;

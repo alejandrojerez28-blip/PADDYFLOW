@@ -10,6 +10,10 @@ import Sales from './pages/Sales';
 import WeighTickets from './pages/WeighTickets';
 import WeighTicketPrint from './pages/WeighTicketPrint';
 import ThirdParties from './pages/ThirdParties';
+import Settlements from './pages/Settlements';
+import SettlementsNew from './pages/SettlementsNew';
+import SettlementDetail from './pages/SettlementDetail';
+import SupplierSettlementPrint from './pages/SupplierSettlementPrint';
 import Lots from './pages/Lots';
 import LotDetail from './pages/LotDetail';
 import Inventory from './pages/Inventory';
@@ -29,6 +33,10 @@ export default function App() {
           <Route path="/sales" element={<Sales />} />
           <Route path="/weigh-tickets" element={<WeighTickets />} />
           <Route path="/third-parties" element={<ThirdParties />} />
+          <Route path="/settlements" element={<Settlements />} />
+          <Route path="/settlements/new" element={<SettlementsNew />} />
+          <Route path="/settlements/:id" element={<SettlementDetail />} />
+          <Route path="/print/supplier-settlement/:id" element={<SupplierSettlementPrint />} />
           <Route path="/lots" element={<Lots />} />
           <Route path="/lots/:id" element={<LotDetail />} />
           <Route path="/inventory" element={<Inventory />} />

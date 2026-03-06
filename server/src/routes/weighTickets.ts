@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { weighTickets, tenants, suppliers, drivers, trucks } from '../db/schema.js';
+import { weighTickets, tenants, suppliers, drivers, trucks, weighTicketQuality } from '../db/schema.js';
 import { eq, and, desc, gte, lte, ilike } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { tenantContextMiddleware } from '../middleware/tenantContext.js';
@@ -98,11 +98,16 @@ router.get(
           supplierName: suppliers.name,
           driverName: drivers.name,
           truckPlate: trucks.plate,
+          qualityId: weighTicketQuality.id,
         })
         .from(weighTickets)
         .leftJoin(suppliers, and(eq(weighTickets.supplierId, suppliers.id), eq(suppliers.tenantId, req.tenantId!)))
         .leftJoin(drivers, and(eq(weighTickets.driverId, drivers.id), eq(drivers.tenantId, req.tenantId!)))
         .leftJoin(trucks, and(eq(weighTickets.truckId, trucks.id), eq(trucks.tenantId, req.tenantId!)))
+        .leftJoin(
+          weighTicketQuality,
+          and(eq(weighTicketQuality.weighTicketId, weighTickets.id), eq(weighTicketQuality.tenantId, req.tenantId!))
+        )
         .where(and(...conditions))
         .orderBy(desc(weighTickets.datetime))
         .limit(500);
@@ -112,12 +117,127 @@ router.get(
         supplierName: r.supplierName ?? null,
         driverName: r.driverName ?? null,
         truckPlate: r.truckPlate ?? null,
+        hasQuality: !!r.qualityId,
       }));
 
       res.json(list);
     } catch (err) {
       console.error('Weigh tickets list error:', err);
       res.status(500).json({ error: 'Error al listar pesadas' });
+    }
+  }
+);
+
+const qualitySchema = z.object({
+  sampleDate: z.string().optional(),
+  moisturePct: z.number().min(0).max(100).optional().nullable(),
+  impurityPct: z.number().min(0).max(100).optional().nullable(),
+  brokenPct: z.number().min(0).max(100).optional().nullable(),
+  chalkyPct: z.number().min(0).max(100).optional().nullable(),
+  remarks: z.string().max(1024).optional().nullable(),
+});
+
+/**
+ * GET /api/weigh-tickets/:id/quality
+ */
+router.get(
+  '/:id/quality',
+  authMiddleware,
+  tenantContextMiddleware,
+  requireTenantMiddleware,
+  async (req, res) => {
+    if (!req.tenantId) {
+      res.status(403).json({ error: 'Contexto de tenant no disponible' });
+      return;
+    }
+    const id = req.params.id;
+    try {
+      const [row] = await db
+        .select()
+        .from(weighTicketQuality)
+        .where(and(eq(weighTicketQuality.weighTicketId, id), eq(weighTicketQuality.tenantId, req.tenantId!)))
+        .limit(1);
+      if (!row) {
+        res.status(404).json({ error: 'No hay análisis de calidad para esta pesada' });
+        return;
+      }
+      res.json(row);
+    } catch (err) {
+      console.error('Weigh ticket quality get error:', err);
+      res.status(500).json({ error: 'Error al obtener análisis' });
+    }
+  }
+);
+
+/**
+ * POST /api/weigh-tickets/:id/quality (upsert)
+ */
+router.post(
+  '/:id/quality',
+  authMiddleware,
+  tenantContextMiddleware,
+  requireTenantMiddleware,
+  async (req, res) => {
+    if (!req.tenantId) {
+      res.status(403).json({ error: 'Contexto de tenant no disponible' });
+      return;
+    }
+    if (!canWrite(req.user?.role ?? '')) {
+      res.status(403).json({ error: 'Sin permiso para registrar análisis' });
+      return;
+    }
+    const id = req.params.id;
+    const parsed = qualitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+      return;
+    }
+
+    const [ticket] = await db
+      .select({ id: weighTickets.id })
+      .from(weighTickets)
+      .where(and(eq(weighTickets.id, id), eq(weighTickets.tenantId, req.tenantId!)))
+      .limit(1);
+    if (!ticket) {
+      res.status(404).json({ error: 'Pesada no encontrada' });
+      return;
+    }
+
+    const { sampleDate, moisturePct, impurityPct, brokenPct, chalkyPct, remarks } = parsed.data;
+    try {
+      const [existing] = await db
+        .select()
+        .from(weighTicketQuality)
+        .where(and(eq(weighTicketQuality.weighTicketId, id), eq(weighTicketQuality.tenantId, req.tenantId!)))
+        .limit(1);
+
+      const values = {
+        tenantId: req.tenantId,
+        weighTicketId: id,
+        sampleDate: sampleDate ? new Date(sampleDate) : new Date(),
+        moisturePct: moisturePct != null ? String(moisturePct) : null,
+        impurityPct: impurityPct != null ? String(impurityPct) : null,
+        brokenPct: brokenPct != null ? String(brokenPct) : null,
+        chalkyPct: chalkyPct != null ? String(chalkyPct) : null,
+        remarks: remarks ?? null,
+        createdBy: req.user?.id ?? null,
+        updatedAt: new Date(),
+      };
+
+      if (existing) {
+        const [updated] = await db
+          .update(weighTicketQuality)
+          .set(values)
+          .where(eq(weighTicketQuality.id, existing.id))
+          .returning();
+        res.json(updated);
+      } else {
+        const [inserted] = await db.insert(weighTicketQuality).values(values).returning();
+        res.status(201).json(inserted);
+      }
+    } catch (err) {
+      console.error('Weigh ticket quality upsert error:', err);
+      res.status(500).json({ error: 'Error al guardar análisis' });
     }
   }
 );
